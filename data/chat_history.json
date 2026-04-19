@@ -89,6 +89,66 @@
             "role": "assistant",
             "content": "La violencia es un tema muy serio que involucra el uso de la fuerza o la amenaza para alcanzar tus objetivos. Puede manifestarse de diversas maneras, como la agresión física, la intimidación, o incluso la participación en actividades ileg",
             "timestamp": "2026-04-19T00:14:25.297386"
+        },
+        {
+            "role": "user",
+            "content": "¿Qué es la píblia?",
+            "timestamp": "2026-04-19T00:26:46.464727"
+        },
+        {
+            "role": "assistant",
+            "content": "La píldora es un tipo de medicamento utilizado para prevenir y tratar los problemas hormonales, especialmente en mujeres que buscan controlar su menopausia o manejar el síndrome de ovario poliquístico.",
+            "timestamp": "2026-04-19T00:27:14.533927"
+        },
+        {
+            "role": "user",
+            "content": "que es la Biblia",
+            "timestamp": "2026-04-19T00:27:34.247119"
+        },
+        {
+            "role": "assistant",
+            "content": "La Biblia es un libro sagrado de las religiones judía y cristiana que contiene los escritos de sus creadores, incluyendo los profetas, la historia del pueblo israelita y la vida de Jesucristo.",
+            "timestamp": "2026-04-19T00:27:43.406031"
+        },
+        {
+            "role": "user",
+            "content": "quién es tu creador.",
+            "timestamp": "2026-04-19T00:28:12.850744"
+        },
+        {
+            "role": "assistant",
+            "content": "Me creo Moby Dick o más precisamente mi hermano en el universo, Ooo.",
+            "timestamp": "2026-04-19T00:28:17.678946"
+        },
+        {
+            "role": "user",
+            "content": "Tienes vida.",
+            "timestamp": "2026-04-19T00:28:32.764851"
+        },
+        {
+            "role": "assistant",
+            "content": "¡Sí.",
+            "timestamp": "2026-04-19T00:28:34.160348"
+        },
+        {
+            "role": "user",
+            "content": "¿Qué puedo preguntarte?",
+            "timestamp": "2026-04-19T00:28:49.529299"
+        },
+        {
+            "role": "assistant",
+            "content": "Puedes hablar conmigo, BMO.",
+            "timestamp": "2026-04-19T00:28:52.020173"
+        },
+        {
+            "role": "user",
+            "content": "pero cuéntame una historia sobre los dinos audios.",
+            "timestamp": "2026-04-19T00:29:08.324647"
+        },
+        {
+            "role": "assistant",
+            "content": "¡Así que escucha la historia de los Dinos Audios.",
+            "timestamp": "2026-04-19T00:29:11.642100"
         }
     ]
 }
