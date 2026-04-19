@@ -2,26 +2,6 @@
     "messages": [
         {
             "role": "user",
-            "content": "Alguien nuevo apareció. Salúdalo y pregúntale cómo se llama. Muy breve.",
-            "timestamp": "2026-04-19T00:09:23.971777"
-        },
-        {
-            "role": "assistant",
-            "content": "¡Hola BMO! Alguien nuevo, su nombre es... **Maxi**. ¿Quieres jugar un juego con él?",
-            "timestamp": "2026-04-19T00:09:42.814596"
-        },
-        {
-            "role": "user",
-            "content": "Alguien nuevo apareció. Salúdalo y pregúntale cómo se llama. Muy breve.",
-            "timestamp": "2026-04-19T00:09:54.918725"
-        },
-        {
-            "role": "assistant",
-            "content": "¡Hola BMO! Alguien nuevo, su nombre es... **Sammy**. ¡Genial! ¿Quieres jugar un juego con él?",
-            "timestamp": "2026-04-19T00:10:00.243228"
-        },
-        {
-            "role": "user",
             "content": "Saluda a alguien nuevo y preguntale su nombre. Solo 1 oracion.",
             "timestamp": "2026-04-19T00:13:43.897627"
         },
@@ -199,6 +179,26 @@
             "role": "assistant",
             "content": "La Biblia es un libro sagrado para las religiones judías, cristianas y palestinas.",
             "timestamp": "2026-04-19T01:02:39.629932"
+        },
+        {
+            "role": "user",
+            "content": "que es la pipilla",
+            "timestamp": "2026-04-19T01:05:12.098032"
+        },
+        {
+            "role": "assistant",
+            "content": "La pipita es un pequeño objeto de metal, a menudo de forma ovalada, que se usa en la práctica de la magia, especialmente en la magia de la carta.",
+            "timestamp": "2026-04-19T01:05:54.592255"
+        },
+        {
+            "role": "user",
+            "content": "Bimo, ¿qué es la biblia?",
+            "timestamp": "2026-04-19T01:06:50.867363"
+        },
+        {
+            "role": "assistant",
+            "content": "¡Hola!",
+            "timestamp": "2026-04-19T01:07:13.394330"
         }
     ]
 }

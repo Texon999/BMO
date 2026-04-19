@@ -17,7 +17,7 @@ import cv2
 from src.display.display import DisplayBMO, Estado
 from src.vision.vision   import VisionBMO
 from src.voice.voice     import VozBMO
-from src.brain.brain     import generar_stream, detectar_nombre, saludo_fijo
+from src.brain.brain     import responder_con_tts, detectar_nombre, saludo_fijo
 from src.memory.register import nombres_a_ids
 
 logging.basicConfig(
@@ -150,11 +150,18 @@ class AgenteBMO:
             else:
                 log.info(f"'{nombre_nuevo}' ya está registrado")
 
-        # Responder con LLM en streaming — habla en cuanto llega la primera oración
+        # Responder — LLM y TTS en paralelo (igual que be-more-agent)
         self.display.set_estado(Estado.THINKING)
-        for oracion in generar_stream(texto, nombre_contexto):
+
+        def _on_speaking():
             self.display.set_estado(Estado.SPEAKING, nombre=nombre_contexto)
-            self.voz.hablar(oracion)
+
+        responder_con_tts(
+            mensaje=texto,
+            hablar_fn=self.voz.hablar,
+            on_start_speaking=_on_speaking,
+            nombre_persona=nombre_contexto,
+        )
         self.display.set_estado(Estado.IDLE)
 
     # ── Registro de persona ───────────────────────────────────────────────────

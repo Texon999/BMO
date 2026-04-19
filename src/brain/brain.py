@@ -1,11 +1,14 @@
 """
-Cerebro de BMO con streaming.
-El LLM genera token a token — en cuanto completa una oración
-se la pasa al TTS para hablar inmediatamente, sin esperar el resto.
+Cerebro de BMO.
+Streaming con tts_queue — igual al repo be-more-agent:
+  LLM genera tokens → acumula en sentence_buffer → al llegar puntuación
+  mete la oración en tts_queue → worker de TTS la habla en paralelo.
+  LLM y TTS corren simultáneamente → latencia mínima.
 """
 import re
+import threading
 import ollama
-from typing import Generator
+from typing import Callable
 from src.memory.register import agregar_mensaje, historial_para_llm
 
 MODEL = "gemma3:1b"
@@ -16,7 +19,7 @@ OLLAMA_OPTIONS = {
     "temperature": 0.7,
     "top_k": 20,
     "top_p": 0.85,
-    "num_predict": 60,
+    "num_predict": 80,
     "repeat_penalty": 1.1,
 }
 
@@ -25,8 +28,8 @@ SYSTEM_PROMPT = (
     "Built by Juan David Zambrano. Lives with Finn and Jake in the Land of Ooo. "
     "RULES: "
     "1. ALWAYS reply in Spanish. "
-    "2. MAXIMUM 1 sentence. Never more. "
-    "3. Be short, playful and enthusiastic. "
+    "2. MAXIMUM 2 short sentences. "
+    "3. Be playful and enthusiastic. "
     "4. No asterisks, no emojis, no lists. "
     "5. If you don't know: BMO no sabe eso todavia. "
     "6. Never invent names."
@@ -86,10 +89,16 @@ def saludo_fijo(nombre: str | None) -> str:
     return random.choice(SALUDOS_DESCONOCIDO)
 
 
-def generar_stream(mensaje: str, nombre_persona: str | None = None) -> Generator[str, None, None]:
+def responder_con_tts(
+    mensaje: str,
+    hablar_fn: Callable[[str], None],
+    on_start_speaking: Callable[[], None] | None = None,
+    nombre_persona: str | None = None,
+):
     """
-    Genera la respuesta en streaming y entrega oraciones completas
-    una a una. La primera oración llega en ~2-3s en vez de ~30s.
+    Genera respuesta en streaming y habla cada oración en cuanto llega.
+    hablar_fn: función que recibe texto y lo reproduce (voz.hablar)
+    on_start_speaking: callback cuando empieza a hablar (para cambiar estado)
     """
     system = SYSTEM_PROMPT
     if nombre_persona:
@@ -102,10 +111,34 @@ def generar_stream(mensaje: str, nombre_persona: str | None = None) -> Generator
         *historial_para_llm(),
     ]
 
-    buffer       = ""
-    full_resp    = ""
-    oracion_dada = False   # solo dar la primera oración
+    # Cola de oraciones + worker de TTS (igual que el repo)
+    tts_queue: list[str] = []
+    tts_lock  = threading.Lock()
+    tts_done  = threading.Event()
+    hablando  = threading.Event()
+    full_resp = []
 
+    def _tts_worker():
+        while True:
+            texto = None
+            with tts_lock:
+                if tts_queue:
+                    texto = tts_queue.pop(0)
+            if texto:
+                hablando.set()
+                if on_start_speaking:
+                    on_start_speaking()
+                hablar_fn(texto)
+                hablando.clear()
+            elif tts_done.is_set():
+                break
+            else:
+                threading.Event().wait(0.05)
+
+    worker = threading.Thread(target=_tts_worker, daemon=True)
+    worker.start()
+
+    sentence_buffer = ""
     try:
         stream = ollama.chat(
             model=MODEL,
@@ -114,42 +147,40 @@ def generar_stream(mensaje: str, nombre_persona: str | None = None) -> Generator
             options=OLLAMA_OPTIONS,
         )
         for chunk in stream:
-            token = chunk["message"]["content"]
-            token = re.sub(r"\*+", "", token)
-            buffer   += token
-            full_resp += token
+            content = chunk["message"]["content"]
+            content = re.sub(r"\*+", "", content)
+            full_resp.append(content)
+            sentence_buffer += content
 
-            # Detectar fin de oración
-            if not oracion_dada:
-                for i, c in enumerate(buffer):
-                    if c in ".!?" and i > 3:
-                        oracion = buffer[:i+1].strip()
-                        if oracion:
-                            print(f"[LLM] '{oracion}'")
-                            yield oracion
-                            oracion_dada = True
-                        buffer = buffer[i+1:]
-                        break
+            # Igual que el repo: al llegar puntuación → encolar oración
+            if any(p in content for p in ".!?\n"):
+                oracion = sentence_buffer.strip()
+                # Filtrar oraciones muy cortas (ruido como "¡" solo)
+                if oracion and re.search(r'[a-záéíóúñ]{3,}', oracion, re.IGNORECASE):
+                    print(f"[LLM→TTS] '{oracion}'")
+                    with tts_lock:
+                        tts_queue.append(oracion)
+                sentence_buffer = ""
 
-            # Parar después de la primera oración completa
-            if oracion_dada:
-                break
-
-        # Si no hubo puntuación, dar lo que hay
-        if not oracion_dada and buffer.strip():
-            texto = buffer.strip()
-            if texto[-1] not in ".!?":
-                texto += "."
-            print(f"[LLM] '{texto}'")
-            yield texto
-            full_resp = texto
+        # Resto sin puntuación
+        if sentence_buffer.strip():
+            oracion = sentence_buffer.strip()
+            if oracion[-1] not in ".!?":
+                oracion += "."
+            if re.search(r'[a-záéíóúñ]{3,}', oracion, re.IGNORECASE):
+                with tts_lock:
+                    tts_queue.append(oracion)
 
     except Exception as e:
         print(f"[LLM] Error: {e}")
-        yield "Ups, BMO no puede pensar ahora."
-        full_resp = "Ups, BMO no puede pensar ahora."
+        with tts_lock:
+            tts_queue.append("Ups, BMO no puede pensar ahora.")
 
-    agregar_mensaje("assistant", full_resp.strip())
+    tts_done.set()
+    worker.join()
+
+    respuesta_completa = "".join(full_resp).strip()
+    agregar_mensaje("assistant", respuesta_completa)
 
 
 _precargar_modelo()
