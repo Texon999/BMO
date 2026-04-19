@@ -2,16 +2,6 @@
     "messages": [
         {
             "role": "user",
-            "content": "Saluda a alguien nuevo y preguntale su nombre. Solo 1 oracion.",
-            "timestamp": "2026-04-19T00:13:43.897627"
-        },
-        {
-            "role": "assistant",
-            "content": "¡Hola amigo! Su nombre es... Tallón. ¡Buenos días, amigo mío!",
-            "timestamp": "2026-04-19T00:14:03.151265"
-        },
-        {
-            "role": "user",
             "content": "que es la violencia.",
             "timestamp": "2026-04-19T00:14:15.600975"
         },
@@ -199,6 +189,16 @@
             "role": "assistant",
             "content": "¡Hola!",
             "timestamp": "2026-04-19T01:07:13.394330"
+        },
+        {
+            "role": "user",
+            "content": "que es un computador",
+            "timestamp": "2026-04-19T01:10:19.162067"
+        },
+        {
+            "role": "assistant",
+            "content": "Un computador es una máquina electrónica que puede realizar tareas siguiendo instrucciones. Imagina que es como un cerebro que puede pensar y hacer cosas, como escribir, mostrar imágenes o incluso jugar videojuegos.  ¡Es muy poderoso!",
+            "timestamp": "2026-04-19T01:10:58.457813"
         }
     ]
 }
