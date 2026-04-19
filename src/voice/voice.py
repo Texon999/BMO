@@ -1,20 +1,18 @@
 """
 Módulo de voz de BMO.
 STT: faster-whisper (tiny, español)
-TTS: piper-tts es_ES-sharvard-medium
+TTS: piper-tts — API correcta con AudioChunk iterable
 """
-import io
-import wave
+import json
 import numpy as np
 import sounddevice as sd
-import soundfile as sf
 from pathlib import Path
 from faster_whisper import WhisperModel
 
 WHISPER_MODEL  = "tiny"
 WHISPER_LANG   = "es"
 SAMPLE_RATE    = 16000
-RECORD_SECONDS = 3   # 3s máximo — si hay silencio VAD lo corta antes
+RECORD_SECONDS = 3   # VAD corta antes si hay silencio
 
 VOICE_ONNX   = Path("voices/es_ES-sharvard-medium.onnx")
 VOICE_CONFIG = Path("voices/es_ES-sharvard-medium.onnx.json")
@@ -26,19 +24,18 @@ class VozBMO:
         self.stt = WhisperModel(WHISPER_MODEL, device="cpu", compute_type="int8")
         print("[VOZ] Whisper listo")
 
-        self._tts = None
+        self._tts      = None
         self._tts_rate = 22050
+
         if VOICE_ONNX.exists():
             print("[VOZ] Cargando Piper TTS...")
             try:
                 from piper.voice import PiperVoice
-                import json
                 self._tts = PiperVoice.load(str(VOICE_ONNX), config_path=str(VOICE_CONFIG))
-                # Leer sample rate del config
-                with open(VOICE_CONFIG) as f:
+                with open(VOICE_CONFIG, encoding="utf-8") as f:
                     cfg = json.load(f)
                 self._tts_rate = cfg.get("audio", {}).get("sample_rate", 22050)
-                print(f"[VOZ] Piper listo — sample_rate={self._tts_rate}")
+                print(f"[VOZ] Piper listo — sample_rate={self._tts_rate}Hz")
             except Exception as e:
                 print(f"[VOZ] Error cargando Piper: {e}")
         else:
@@ -48,7 +45,6 @@ class VozBMO:
     # ── STT ───────────────────────────────────────────────────────────────────
 
     def escuchar(self, segundos: int = RECORD_SECONDS) -> str:
-        """Graba del micrófono y transcribe con Whisper."""
         print(f"[STT] Grabando {segundos}s...")
         try:
             audio = sd.rec(
@@ -63,12 +59,11 @@ class VozBMO:
             return ""
 
         audio_np = audio.flatten()
-        # Ignorar si el audio es casi silencio
         if np.abs(audio_np).max() < 0.01:
             print("[STT] Silencio detectado")
             return ""
 
-        segments, info = self.stt.transcribe(
+        segments, _ = self.stt.transcribe(
             audio_np,
             language=WHISPER_LANG,
             beam_size=1,
@@ -85,27 +80,28 @@ class VozBMO:
     # ── TTS ───────────────────────────────────────────────────────────────────
 
     def hablar(self, texto: str):
-        """Sintetiza con Piper y reproduce."""
         if not self._tts:
             print(f"[TTS] (sin voz) BMO: {texto}")
             return
 
-        print(f"[TTS] Sintetizando: '{texto[:60]}...' " if len(texto) > 60 else f"[TTS] Sintetizando: '{texto}'")
-        try:
-            buf = io.BytesIO()
-            with wave.open(buf, "wb") as wav_file:
-                wav_file.setnchannels(1)
-                wav_file.setsampwidth(2)  # 16-bit
-                wav_file.setframerate(self._tts_rate)
-                self._tts.synthesize(texto, wav_file)
+        label = texto[:60] + "..." if len(texto) > 60 else texto
+        print(f"[TTS] Sintetizando: '{label}'")
 
-            buf.seek(0)
-            data, sr = sf.read(buf, dtype="float32")
-            print(f"[TTS] Reproduciendo {len(data)/sr:.1f}s de audio @ {sr}Hz")
-            # Usar dispositivo de salida por defecto del sistema (incluye audífonos)
-            sd.play(data, sr, device=sd.default.device[1])
+        try:
+            # Piper devuelve AudioChunk iterables — concatenar todos
+            chunks = list(self._tts.synthesize(texto))
+            if not chunks:
+                print("[TTS] Sin audio generado")
+                return
+
+            audio_np = np.concatenate([c.audio_float_array for c in chunks])
+            sr = chunks[0].sample_rate
+
+            duracion = len(audio_np) / sr
+            print(f"[TTS] Reproduciendo {duracion:.1f}s @ {sr}Hz")
+            sd.play(audio_np, sr)
             sd.wait()
-            print("[TTS] Reproducción completa")
+            print("[TTS] Listo")
         except Exception as e:
             print(f"[TTS] Error: {e}")
-            print(f"[TTS] (fallback) BMO: {texto}")
+            print(f"[TTS] BMO: {texto}")
