@@ -171,8 +171,14 @@ class VozBMO:
                 return
             audio_np = np.concatenate([c.audio_float_array for c in chunks])
             sr       = chunks[0].sample_rate
-            print(f"[TTS] {len(audio_np)/sr:.1f}s")
-            sd.play(audio_np, sr)
+
+            # Ajuste de pitch para sonar más a BMO:
+            # Reproducir a mayor sample rate = voz más aguda y rápida
+            # 22050 * 0.85 = voz ~18% más aguda (efecto BMO)
+            sr_playback = int(sr * 0.82)
+
+            print(f"[TTS] {len(audio_np)/sr:.1f}s (pitch ajustado)")
+            sd.play(audio_np, sr_playback)
             sd.wait()
         except Exception as e:
             print(f"[TTS] Error: {e}")
