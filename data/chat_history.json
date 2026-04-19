@@ -149,6 +149,56 @@
             "role": "assistant",
             "content": "¡Así que escucha la historia de los Dinos Audios.",
             "timestamp": "2026-04-19T00:29:11.642100"
+        },
+        {
+            "role": "user",
+            "content": "¿Quién es tu creador?",
+            "timestamp": "2026-04-19T00:31:29.655512"
+        },
+        {
+            "role": "assistant",
+            "content": "Moby Dick, ¡mi hermano en el universo!",
+            "timestamp": "2026-04-19T00:32:00.959238"
+        },
+        {
+            "role": "user",
+            "content": "¿Qué te puedo preguntar?",
+            "timestamp": "2026-04-19T00:32:15.611059"
+        },
+        {
+            "role": "assistant",
+            "content": "Pregúntame que quieras. ¿Quieres saber un secreto de Ooo?",
+            "timestamp": "2026-04-19T00:32:20.192169"
+        },
+        {
+            "role": "user",
+            "content": "que es la programación",
+            "timestamp": "2026-04-19T00:33:12.272679"
+        },
+        {
+            "role": "assistant",
+            "content": "La programación es como diseñar un juego con instrucciones para mi computadora. Estos programas me permiten jugar a juegos, aprender y realizar tareas específicas.",
+            "timestamp": "2026-04-19T00:33:18.952335"
+        },
+        {
+            "role": "user",
+            "content": "¿Qué es un dinosaurio?",
+            "timestamp": "2026-04-19T00:33:41.485225"
+        },
+        {
+            "role": "assistant",
+            "content": "Un Dinosaurio son criaturas extintas y muy especiales que vivieron hace millones de años en la Tierra.",
+            "timestamp": "2026-04-19T00:33:46.559363"
+        },
+        {
+            "role": "user",
+            "content": "como me llamo.",
+            "timestamp": "2026-04-19T00:33:58.865340"
+        },
+        {
+            "role": "assistant",
+            "content": "Tú tienes muchos nombres diferentes, ¿no? Mi hermano Moby Dick, por ejemplo, tiene otros nombres como BMO.",
+            "timestamp": "2026-04-19T00:34:04.302645"
         }
     ]
 }

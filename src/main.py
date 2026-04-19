@@ -39,9 +39,12 @@ class AgenteBMO:
         self.voz     = VozBMO()
 
         self._running         = True
-        self._nombre_actual: str | None = None   # nombre detectado por cámara
+        self._nombre_actual: str | None = None   # nombre detectado por cámara (pegajoso)
+        self._nombre_camara:  str | None = None   # nombre raw del hilo de cámara
         self._ultimo_saludo: dict[str, float] = {}
         self._lock_camara     = threading.Lock()
+        self._ultimo_visto:   float = 0.0         # timestamp última vez que se vio cara
+        self._NOMBRE_TIMEOUT  = 30.0              # segundos antes de olvidar el nombre
 
         log.info("=== BMO listo ===")
 
@@ -59,7 +62,7 @@ class AgenteBMO:
     # ── Hilo de cámara ────────────────────────────────────────────────────────
 
     def _loop_camara(self):
-        """Lee la cámara continuamente y actualiza el nombre detectado."""
+        """Lee la cámara y actualiza el nombre detectado con lógica pegajosa."""
         while self._running:
             ret, frame = self.vision.cap.read()
             if not ret:
@@ -71,11 +74,16 @@ class AgenteBMO:
 
             with self._lock_camara:
                 if reconocidos:
-                    self._nombre_actual = reconocidos[0]
+                    self._nombre_camara = reconocidos[0]
+                    self._nombre_actual = reconocidos[0]   # actualizar nombre pegajoso
+                    self._ultimo_visto  = time.time()
                 else:
-                    self._nombre_actual = None
+                    self._nombre_camara = None
+                    # Olvidar nombre solo si pasó el timeout
+                    if time.time() - self._ultimo_visto > self._NOMBRE_TIMEOUT:
+                        self._nombre_actual = None
 
-            time.sleep(0.1)  # ~10fps es suficiente para reconocimiento
+            time.sleep(0.1)
 
     # ── Hilo de lógica ────────────────────────────────────────────────────────
 
@@ -123,9 +131,13 @@ class AgenteBMO:
 
         log.info(f"Escuché: '{texto}'")
 
-        # Obtener nombre actual de cámara para contexto
+        # Obtener nombre actual de cámara para contexto (pegajoso)
         with self._lock_camara:
             nombre_contexto = self._nombre_actual
+        if nombre_contexto:
+            log.info(f"Pensando... (contexto: {nombre_contexto})")
+        else:
+            log.info("Pensando... (contexto: ninguno)")
 
         # Detectar si dice su nombre → registrar
         nombre_nuevo = detectar_nombre(texto)
@@ -140,7 +152,6 @@ class AgenteBMO:
 
         # Responder con LLM
         self.display.set_estado(Estado.THINKING)
-        log.info(f"Pensando... (contexto: {nombre_contexto or 'ninguno'})")
         respuesta = generar_respuesta(texto, nombre_contexto)
         log.info(f"BMO: '{respuesta}'")
 

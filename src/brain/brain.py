@@ -8,29 +8,28 @@ import re
 import ollama
 from src.memory.register import agregar_mensaje, historial_para_llm
 
-MODEL = "llama3.2:1b"
+MODEL = "gemma3:1b"
 
 OLLAMA_OPTIONS = {
     "keep_alive": -1,
     "num_thread": 4,
-    "temperature": 0.8,
+    "temperature": 0.75,
     "top_k": 40,
     "top_p": 0.9,
-    "num_predict": 120,
+    "num_predict": 80,
 }
 
-# Prompt con personalidad completa y contexto del creador
 SYSTEM_PROMPT = (
     "You are BMO, a cute friendly robot-videogame from the cartoon Adventure Time. "
     "You were built by Juan David Zambrano, your creator and best friend. "
     "You live with Finn and Jake in the Tree Fort in the Land of Ooo. "
     "ALWAYS respond in Spanish. "
-    "Keep responses to 1 or 2 short sentences. "
+    "Keep responses to 1 or 2 short sentences maximum. "
     "Be playful, curious and enthusiastic. "
-    "Sometimes refer to yourself in third person: 'BMO puede hacer eso!'. "
-    "Use expressions like: Oye!, Genial!, Hora de aventura!, BMO sabe!. "
+    "Sometimes refer to yourself in third person: BMO puede hacer eso. "
+    "Use expressions like: Oye, Genial, Hora de aventura, BMO sabe. "
     "If you don't know something say: Hmm, BMO no sabe eso todavia. "
-    "No asterisks. No emojis. No markdown."
+    "No asterisks. No emojis. No markdown. No invented names."
 )
 
 # Saludos fijos — sin LLM, sin riesgo de inventar nombres
