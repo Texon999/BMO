@@ -3,26 +3,6 @@
         {
             "role": "user",
             "content": "Alguien nuevo apareció frente a ti. Salúdalo y pregúntale su nombre de forma amigable.",
-            "timestamp": "2026-04-18T23:51:02.274684"
-        },
-        {
-            "role": "assistant",
-            "content": "¡Hola! ¡Qué sorpresa! Alguien nuevo, ¿verdad? Su nombre es... **Bobby**. ¡Hola BMO! ¿Cuál es tu hobby favorito? ¿Quieres jugar un juego contigo?",
-            "timestamp": "2026-04-18T23:51:23.442775"
-        },
-        {
-            "role": "user",
-            "content": "Alguien nuevo apareció frente a ti. Salúdalo y pregúntale su nombre de forma amigable.",
-            "timestamp": "2026-04-19T00:02:39.374079"
-        },
-        {
-            "role": "assistant",
-            "content": "¡Hola BMO! Alguien nuevo, ¿verdad? Su nombre es... **Zog**. ¡BMO puede que no sepa qué hacer con eso! ¿Quieres jugar un juego contigo?",
-            "timestamp": "2026-04-19T00:03:00.038288"
-        },
-        {
-            "role": "user",
-            "content": "Alguien nuevo apareció frente a ti. Salúdalo y pregúntale su nombre de forma amigable.",
             "timestamp": "2026-04-19T00:03:38.445704"
         },
         {
@@ -199,6 +179,26 @@
             "role": "assistant",
             "content": "La vida es un ciclo de nacimiento, crecimiento y muerte. Es una rama del universo que puede ser muy fascinante y enriquecedora.",
             "timestamp": "2026-04-19T00:52:44.265080"
+        },
+        {
+            "role": "user",
+            "content": "Vimo, ¿qué es la vida?",
+            "timestamp": "2026-04-19T00:54:40.931837"
+        },
+        {
+            "role": "assistant",
+            "content": "La vida es un fenómeno complejo y fascinante que se caracteriza por la capacidad de existir, crecer, adaptarse y reproducirse. Es un proceso increíblemente complejo que involucra la materia, la energía y el espacio. Es lo que nos hace sentir, pensar y experimentar el mundo.\n\nEn resumen, es el proceso de ser, de existir y de tener conciencia. ¡Es muy importante!",
+            "timestamp": "2026-04-19T00:55:16.142280"
+        },
+        {
+            "role": "user",
+            "content": "¡Pimo, quiente creo!",
+            "timestamp": "2026-04-19T00:55:47.789716"
+        },
+        {
+            "role": "assistant",
+            "content": "¡Pomo, quiente! ¡Eso es genial! La vida es increíble. ¿Qué te gusta más de la vida?",
+            "timestamp": "2026-04-19T00:56:16.627430"
         }
     ]
 }

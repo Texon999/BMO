@@ -148,8 +148,13 @@ class VozBMO:
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": 300},
             condition_on_previous_text=False,
+            no_speech_threshold=0.6,
+            log_prob_threshold=-0.8,
         )
-        texto = " ".join(s.text for s in segments).strip()
+        # Filtrar segmentos con baja confianza (ruido transcrito como texto)
+        texto = " ".join(
+            s.text for s in segments if s.no_speech_prob < 0.6
+        ).strip()
         texto = texto.replace("[BLANK_AUDIO]", "").replace("(Música)", "").strip()
 
         if texto:
