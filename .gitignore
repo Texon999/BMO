@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Data - keep structure but ignore model/history
+data/trainer.yml
+data/history/
+data/names.json
+data/persons.json
+
+# Voices (large binary files)
+voices/*.onnx
+voices/*.json
+
+# Piper binary
+piper/
+
+# Whisper models
+models/
+
+# OS
+.DS_Store
+Thumbs.db
