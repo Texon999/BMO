@@ -1,0 +1,14 @@
+{
+    "messages": [
+        {
+            "role": "user",
+            "content": "cuanto es una ocasión ¿no?",
+            "timestamp": "2026-04-18T23:41:43.447813"
+        },
+        {
+            "role": "assistant",
+            "content": "Una ocasión es, como siempre, un tiempo especial. Es un momento para disfrutar del presente y aprovechar cada momento con la persona que te importa. ¿Y tú a qué ocasión pensas que me dirá?",
+            "timestamp": "2026-04-18T23:41:59.105622"
+        }
+    ]
+}
