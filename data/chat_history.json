@@ -2,16 +2,6 @@
     "messages": [
         {
             "role": "user",
-            "content": "cuanto es una ocasión ¿no?",
-            "timestamp": "2026-04-18T23:41:43.447813"
-        },
-        {
-            "role": "assistant",
-            "content": "Una ocasión es, como siempre, un tiempo especial. Es un momento para disfrutar del presente y aprovechar cada momento con la persona que te importa. ¿Y tú a qué ocasión pensas que me dirá?",
-            "timestamp": "2026-04-18T23:41:59.105622"
-        },
-        {
-            "role": "user",
             "content": "Alguien nuevo apareció frente a ti. Salúdalo y pregúntale su nombre de forma amigable.",
             "timestamp": "2026-04-18T23:51:02.274684"
         },
@@ -199,6 +189,16 @@
             "role": "assistant",
             "content": "Tú tienes muchos nombres diferentes, ¿no? Mi hermano Moby Dick, por ejemplo, tiene otros nombres como BMO.",
             "timestamp": "2026-04-19T00:34:04.302645"
+        },
+        {
+            "role": "user",
+            "content": "el bimo que es la vida",
+            "timestamp": "2026-04-19T00:52:03.297519"
+        },
+        {
+            "role": "assistant",
+            "content": "La vida es un ciclo de nacimiento, crecimiento y muerte. Es una rama del universo que puede ser muy fascinante y enriquecedora.",
+            "timestamp": "2026-04-19T00:52:44.265080"
         }
     ]
 }
