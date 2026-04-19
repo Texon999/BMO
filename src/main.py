@@ -27,7 +27,6 @@ logging.basicConfig(
 )
 log = logging.getLogger("BMO")
 
-LISTEN_SECONDS = 5      # segundos de grabación por turno
 CAPTURE_FRAMES = 25     # fotos para registrar un rostro
 SALUDO_COOLDOWN = 60.0  # segundos entre saludos a la misma persona
 
@@ -115,7 +114,7 @@ class AgenteBMO:
 
         # Escuchar
         self.display.set_estado(Estado.LISTENING)
-        texto = self.voz.escuchar(LISTEN_SECONDS)
+        texto = self.voz.escuchar()
 
         if not texto:
             self.display.set_estado(Estado.IDLE)
