@@ -49,6 +49,26 @@
             "role": "assistant",
             "content": "¡Hola BMO! Alguien nuevo, ¿verdad? Su nombre es... **Lola**. ¡BMO sabe que eres una mujer divertida! ¿Quieres saber un secreto sobre la Casa del Árbol? Ella siempre quiere saber más.",
             "timestamp": "2026-04-19T00:04:45.330120"
+        },
+        {
+            "role": "user",
+            "content": "Alguien nuevo apareció. Salúdalo y pregúntale cómo se llama. Muy breve.",
+            "timestamp": "2026-04-19T00:09:23.971777"
+        },
+        {
+            "role": "assistant",
+            "content": "¡Hola BMO! Alguien nuevo, su nombre es... **Maxi**. ¿Quieres jugar un juego con él?",
+            "timestamp": "2026-04-19T00:09:42.814596"
+        },
+        {
+            "role": "user",
+            "content": "Alguien nuevo apareció. Salúdalo y pregúntale cómo se llama. Muy breve.",
+            "timestamp": "2026-04-19T00:09:54.918725"
+        },
+        {
+            "role": "assistant",
+            "content": "¡Hola BMO! Alguien nuevo, su nombre es... **Sammy**. ¡Genial! ¿Quieres jugar un juego con él?",
+            "timestamp": "2026-04-19T00:10:00.243228"
         }
     ]
 }

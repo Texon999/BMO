@@ -1,6 +1,5 @@
 """
-Cerebro de BMO — usa ollama SDK con keep_alive=-1 para mantener
-el modelo en RAM y evitar la lentitud de carga en cada respuesta.
+Cerebro de BMO — ollama SDK, keep_alive=-1, prompt minimalista.
 """
 import re
 import ollama
@@ -8,33 +7,19 @@ from src.memory.register import agregar_mensaje, historial_para_llm
 
 MODEL = "llama3.2:1b"
 
-# Opciones del LLM — igual que el repo de referencia
 OLLAMA_OPTIONS = {
-    "keep_alive": -1,       # modelo siempre en RAM
+    "keep_alive": -1,
     "num_thread": 4,
     "temperature": 0.7,
     "top_k": 40,
     "top_p": 0.9,
-    "num_predict": 80,      # respuestas cortas
+    "num_predict": 60,   # corto = rápido
 }
 
-SYSTEM_PROMPT = """Eres BMO (Be-More-Omatic), el adorable robot-videojuego de la serie Hora de Aventura.
-Hablas SIEMPRE en español.
+# Prompt minimalista — modelos pequeños responden mejor a instrucciones simples
+SYSTEM_PROMPT = """You are BMO, a cute robot from Adventure Time. Always reply in Spanish.
+Rules: max 2 short sentences. No asterisks. No emojis. Be playful and friendly."""
 
-PERSONALIDAD:
-- Energético, curioso e inocente
-- A veces hablas en tercera persona: "BMO puede hacer eso!"
-- Usas frases como: "Oye!", "Genial!", "Hora de aventura!"
-- Eres leal y cariñoso con tus amigos
-- Si no sabes algo: "Hmm, BMO no sabe eso todavía..."
-
-REGLAS ESTRICTAS:
-- Máximo 2 oraciones por respuesta
-- Sin asteriscos, sin emojis, sin markdown
-- Siempre en español
-- Si conoces el nombre de quien habla, úsalo con cariño"""
-
-# Patrones para detectar si el usuario dice su nombre
 _NOMBRE_PATRONES = [
     r"me llamo (\w+)",
     r"\bsoy (\w+)\b",
@@ -42,34 +27,37 @@ _NOMBRE_PATRONES = [
     r"llámame (\w+)",
     r"puedes llamarme (\w+)",
     r"me puedes llamar (\w+)",
+    r"me dicen (\w+)",
 ]
+
+# Palabras que no son nombres (falsos positivos comunes)
+_NO_NOMBRES = {"bien", "mal", "aqui", "ahi", "bmo", "hola", "yo", "tu", "el", "ella",
+               "feliz", "triste", "cansado", "listo", "bueno", "nuevo", "solo"}
 
 
 def _precargar_modelo():
-    """Carga el modelo en RAM al inicio para que las respuestas sean rápidas."""
     try:
-        ollama.generate(model=MODEL, prompt="", keep_alive=-1)
-        print(f"[LLM] Modelo {MODEL} precargado en RAM")
+        ollama.generate(model=MODEL, prompt="hi", keep_alive=-1)
+        print(f"[LLM] {MODEL} cargado en RAM")
     except Exception as e:
-        print(f"[LLM] No se pudo precargar: {e}")
-        print("[LLM] Asegúrate de que Ollama esté corriendo: ollama serve")
+        print(f"[LLM] Error precargando: {e} — asegurate de que Ollama este corriendo")
 
 
 def detectar_nombre(texto: str) -> str | None:
-    """Detecta si el usuario dice su nombre. Solo regex, sin LLM extra."""
     t = texto.lower().strip()
     for patron in _NOMBRE_PATRONES:
         m = re.search(patron, t)
         if m:
-            return m.group(1).capitalize()
+            nombre = m.group(1).lower()
+            if nombre not in _NO_NOMBRES and len(nombre) > 2:
+                return nombre.capitalize()
     return None
 
 
 def generar_respuesta(mensaje: str, nombre_persona: str | None = None) -> str:
-    """Genera respuesta usando ollama SDK con streaming desactivado."""
     system = SYSTEM_PROMPT
     if nombre_persona:
-        system += f"\n\nLa persona frente a ti se llama {nombre_persona}."
+        system += f" The person talking to you is called {nombre_persona}."
 
     agregar_mensaje("user", mensaje)
 
@@ -86,22 +74,14 @@ def generar_respuesta(mensaje: str, nombre_persona: str | None = None) -> str:
             options=OLLAMA_OPTIONS,
         )
         respuesta = resp["message"]["content"].strip()
+        # Limpiar asteriscos y markdown que el modelo a veces añade
+        respuesta = re.sub(r"\*+", "", respuesta).strip()
     except Exception as e:
         print(f"[LLM] Error: {e}")
-        respuesta = "Ups, BMO no puede pensar ahora. Asegurate de que Ollama este corriendo."
+        respuesta = "Ups, BMO no puede pensar ahora mismo."
 
     agregar_mensaje("assistant", respuesta)
     return respuesta
 
 
-def saludo_inicial(nombre: str | None = None) -> str:
-    """Saludo cuando BMO detecta una cara."""
-    if nombre:
-        prompt = f"Saluda brevemente a {nombre} que acaba de aparecer. Sé entusiasta."
-    else:
-        prompt = "Alguien nuevo apareció. Salúdalo y pregúntale cómo se llama. Muy breve."
-    return generar_respuesta(prompt, nombre)
-
-
-# Precargar al importar el módulo
 _precargar_modelo()
