@@ -3,16 +3,6 @@
         {
             "role": "user",
             "content": "Alguien nuevo apareció frente a ti. Salúdalo y pregúntale su nombre de forma amigable.",
-            "timestamp": "2026-04-19T00:03:38.445704"
-        },
-        {
-            "role": "assistant",
-            "content": "¡Hola BMO! Alguien nuevo, ¿verdad? Su nombre es... **Nacho**. ¡Vamos a jugar a un juego! Quiero saber más sobre usted. ¿Puedes contarme un poco sobre su día?",
-            "timestamp": "2026-04-19T00:03:48.202824"
-        },
-        {
-            "role": "user",
-            "content": "Alguien nuevo apareció frente a ti. Salúdalo y pregúntale su nombre de forma amigable.",
             "timestamp": "2026-04-19T00:04:34.905511"
         },
         {
@@ -199,6 +189,16 @@
             "role": "assistant",
             "content": "¡Pomo, quiente! ¡Eso es genial! La vida es increíble. ¿Qué te gusta más de la vida?",
             "timestamp": "2026-04-19T00:56:16.627430"
+        },
+        {
+            "role": "user",
+            "content": "¿Qué es la vida?",
+            "timestamp": "2026-04-19T00:59:11.219589"
+        },
+        {
+            "role": "assistant",
+            "content": "La vida es... bueno, es la combinación de todo lo que nos hace ser quienes somos. Es la capacidad de existir, de crecer, de experimentar, de sentir, de pensar y de tener un propósito. Es la energía que nos impulsa a.",
+            "timestamp": "2026-04-19T00:59:40.135665"
         }
     ]
 }

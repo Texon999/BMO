@@ -16,8 +16,8 @@ OLLAMA_OPTIONS = {
     "temperature": 0.7,
     "top_k": 20,
     "top_p": 0.85,
-    "num_predict": 50,      # máximo 50 tokens = ~2 oraciones cortas
-    "repeat_penalty": 1.1,  # evita que repita frases
+    "num_predict": 35,      # ~1 oración corta
+    "repeat_penalty": 1.1,
 }
 
 SYSTEM_PROMPT = (
@@ -90,6 +90,14 @@ def saludo_fijo(nombre: str | None) -> str:
     return random.choice(SALUDOS_DESCONOCIDO)
 
 
+def _truncar_primera_oracion(texto: str) -> str:
+    """Devuelve solo la primera oración completa."""
+    for i, c in enumerate(texto):
+        if c in ".!?" and i > 5:
+            return texto[:i+1].strip()
+    return texto.strip()
+
+
 def generar_respuesta(mensaje: str, nombre_persona: str | None = None) -> str:
     """Respuesta conversacional con LLM."""
     system = SYSTEM_PROMPT
@@ -112,7 +120,7 @@ def generar_respuesta(mensaje: str, nombre_persona: str | None = None) -> str:
         )
         respuesta = resp["message"]["content"].strip()
         respuesta = re.sub(r"\*+", "", respuesta).strip()
-        # Asegurar que termina en puntuación
+        respuesta = _truncar_primera_oracion(respuesta)
         if respuesta and respuesta[-1] not in ".!?":
             respuesta += "."
     except Exception as e:
