@@ -1,11 +1,11 @@
 """
-Cerebro de BMO.
-- Saludos con texto FIJO (sin LLM) para evitar nombres inventados
-- LLM solo para respuestas de conversación
-- stop tokens para forzar respuestas cortas
+Cerebro de BMO con streaming.
+El LLM genera token a token — en cuanto completa una oración
+se la pasa al TTS para hablar inmediatamente, sin esperar el resto.
 """
 import re
 import ollama
+from typing import Generator
 from src.memory.register import agregar_mensaje, historial_para_llm
 
 MODEL = "gemma3:1b"
@@ -16,7 +16,7 @@ OLLAMA_OPTIONS = {
     "temperature": 0.7,
     "top_k": 20,
     "top_p": 0.85,
-    "num_predict": 35,      # ~1 oración corta
+    "num_predict": 60,
     "repeat_penalty": 1.1,
 }
 
@@ -28,21 +28,20 @@ SYSTEM_PROMPT = (
     "2. MAXIMUM 1 sentence. Never more. "
     "3. Be short, playful and enthusiastic. "
     "4. No asterisks, no emojis, no lists. "
-    "5. If you don't know: 'BMO no sabe eso todavia.' "
+    "5. If you don't know: BMO no sabe eso todavia. "
     "6. Never invent names."
 )
 
-# Saludos fijos — sin LLM, sin riesgo de inventar nombres
 SALUDOS_CONOCIDO = [
     "Hola {nombre}! Que bueno verte de nuevo!",
     "Oye {nombre}! BMO estaba esperandote!",
-    "{nombre}! Hola hola! Hora de aventura!",
+    "{nombre}! Hola! Hora de aventura!",
 ]
 
 SALUDOS_DESCONOCIDO = [
     "Hola! Soy BMO. Como te llamas?",
     "Oye! No te conozco. Cual es tu nombre?",
-    "Hola amigo! BMO quiere saber tu nombre!",
+    "Hola! BMO quiere saber tu nombre!",
 ]
 
 _NOMBRE_PATRONES = [
@@ -70,7 +69,6 @@ def _precargar_modelo():
 
 
 def detectar_nombre(texto: str) -> str | None:
-    """Detecta si el usuario dice su nombre. Puro regex, sin LLM."""
     t = texto.lower().strip()
     for patron in _NOMBRE_PATRONES:
         m = re.search(patron, t)
@@ -82,24 +80,17 @@ def detectar_nombre(texto: str) -> str | None:
 
 
 def saludo_fijo(nombre: str | None) -> str:
-    """Saludo con texto fijo — nunca inventa nombres."""
     import random
     if nombre:
-        plantilla = random.choice(SALUDOS_CONOCIDO)
-        return plantilla.format(nombre=nombre)
+        return random.choice(SALUDOS_CONOCIDO).format(nombre=nombre)
     return random.choice(SALUDOS_DESCONOCIDO)
 
 
-def _truncar_primera_oracion(texto: str) -> str:
-    """Devuelve solo la primera oración completa."""
-    for i, c in enumerate(texto):
-        if c in ".!?" and i > 5:
-            return texto[:i+1].strip()
-    return texto.strip()
-
-
-def generar_respuesta(mensaje: str, nombre_persona: str | None = None) -> str:
-    """Respuesta conversacional con LLM."""
+def generar_stream(mensaje: str, nombre_persona: str | None = None) -> Generator[str, None, None]:
+    """
+    Genera la respuesta en streaming y entrega oraciones completas
+    una a una. La primera oración llega en ~2-3s en vez de ~30s.
+    """
     system = SYSTEM_PROMPT
     if nombre_persona:
         system += f" The user's name is {nombre_persona}."
@@ -111,24 +102,54 @@ def generar_respuesta(mensaje: str, nombre_persona: str | None = None) -> str:
         *historial_para_llm(),
     ]
 
+    buffer       = ""
+    full_resp    = ""
+    oracion_dada = False   # solo dar la primera oración
+
     try:
-        resp = ollama.chat(
+        stream = ollama.chat(
             model=MODEL,
             messages=messages,
-            stream=False,
+            stream=True,
             options=OLLAMA_OPTIONS,
         )
-        respuesta = resp["message"]["content"].strip()
-        respuesta = re.sub(r"\*+", "", respuesta).strip()
-        respuesta = _truncar_primera_oracion(respuesta)
-        if respuesta and respuesta[-1] not in ".!?":
-            respuesta += "."
+        for chunk in stream:
+            token = chunk["message"]["content"]
+            token = re.sub(r"\*+", "", token)
+            buffer   += token
+            full_resp += token
+
+            # Detectar fin de oración
+            if not oracion_dada:
+                for i, c in enumerate(buffer):
+                    if c in ".!?" and i > 3:
+                        oracion = buffer[:i+1].strip()
+                        if oracion:
+                            print(f"[LLM] '{oracion}'")
+                            yield oracion
+                            oracion_dada = True
+                        buffer = buffer[i+1:]
+                        break
+
+            # Parar después de la primera oración completa
+            if oracion_dada:
+                break
+
+        # Si no hubo puntuación, dar lo que hay
+        if not oracion_dada and buffer.strip():
+            texto = buffer.strip()
+            if texto[-1] not in ".!?":
+                texto += "."
+            print(f"[LLM] '{texto}'")
+            yield texto
+            full_resp = texto
+
     except Exception as e:
         print(f"[LLM] Error: {e}")
-        respuesta = "Ups, BMO no puede pensar ahora."
+        yield "Ups, BMO no puede pensar ahora."
+        full_resp = "Ups, BMO no puede pensar ahora."
 
-    agregar_mensaje("assistant", respuesta)
-    return respuesta
+    agregar_mensaje("assistant", full_resp.strip())
 
 
 _precargar_modelo()
