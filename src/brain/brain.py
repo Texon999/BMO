@@ -1,5 +1,8 @@
 """
-Cerebro de BMO — ollama SDK, keep_alive=-1, prompt minimalista.
+Cerebro de BMO.
+- Saludos con texto FIJO (sin LLM) para evitar nombres inventados
+- LLM solo para respuestas de conversación
+- stop tokens para forzar respuestas cortas
 """
 import re
 import ollama
@@ -10,40 +13,60 @@ MODEL = "llama3.2:1b"
 OLLAMA_OPTIONS = {
     "keep_alive": -1,
     "num_thread": 4,
-    "temperature": 0.7,
+    "temperature": 0.8,
     "top_k": 40,
     "top_p": 0.9,
-    "num_predict": 60,   # corto = rápido
+    "num_predict": 80,
+    "stop": ["\n", ".", "!", "?"],   # para en el primer punto/signo
 }
 
-# Prompt minimalista — modelos pequeños responden mejor a instrucciones simples
-SYSTEM_PROMPT = """You are BMO, a cute robot from Adventure Time. Always reply in Spanish.
-Rules: max 2 short sentences. No asterisks. No emojis. Be playful and friendly."""
+# Prompt en inglés — modelos pequeños siguen instrucciones en inglés mucho mejor
+SYSTEM_PROMPT = (
+    "You are BMO, a cute friendly robot from Adventure Time. "
+    "ALWAYS respond in Spanish. "
+    "Keep responses to ONE short sentence only. "
+    "Be playful. No asterisks. No emojis."
+)
+
+# Saludos fijos — sin LLM, sin riesgo de inventar nombres
+SALUDOS_CONOCIDO = [
+    "Hola {nombre}! Que bueno verte de nuevo!",
+    "Oye {nombre}! BMO estaba esperandote!",
+    "{nombre}! Hola hola! Hora de aventura!",
+]
+
+SALUDOS_DESCONOCIDO = [
+    "Hola! Soy BMO. Como te llamas?",
+    "Oye! No te conozco. Cual es tu nombre?",
+    "Hola amigo! BMO quiere saber tu nombre!",
+]
 
 _NOMBRE_PATRONES = [
     r"me llamo (\w+)",
-    r"\bsoy (\w+)\b",
     r"mi nombre es (\w+)",
     r"llámame (\w+)",
-    r"puedes llamarme (\w+)",
-    r"me puedes llamar (\w+)",
     r"me dicen (\w+)",
+    r"me puedes llamar (\w+)",
+    r"soy (\w+)",
 ]
 
-# Palabras que no son nombres (falsos positivos comunes)
-_NO_NOMBRES = {"bien", "mal", "aqui", "ahi", "bmo", "hola", "yo", "tu", "el", "ella",
-               "feliz", "triste", "cansado", "listo", "bueno", "nuevo", "solo"}
+_NO_NOMBRES = {
+    "bien", "mal", "aqui", "ahi", "bmo", "hola", "yo", "tu", "el", "ella",
+    "feliz", "triste", "cansado", "listo", "bueno", "nuevo", "solo", "aquí",
+    "ahí", "muy", "poco", "nada", "todo", "algo", "nadie", "alguien",
+}
 
 
 def _precargar_modelo():
     try:
         ollama.generate(model=MODEL, prompt="hi", keep_alive=-1)
-        print(f"[LLM] {MODEL} cargado en RAM")
+        print(f"[LLM] {MODEL} en RAM")
     except Exception as e:
-        print(f"[LLM] Error precargando: {e} — asegurate de que Ollama este corriendo")
+        print(f"[LLM] Error: {e} — ejecuta: ollama serve")
 
 
 def detectar_nombre(texto: str) -> str | None:
+    """Detecta si el usuario dice su nombre. Puro regex, sin LLM."""
     t = texto.lower().strip()
     for patron in _NOMBRE_PATRONES:
         m = re.search(patron, t)
@@ -54,10 +77,20 @@ def detectar_nombre(texto: str) -> str | None:
     return None
 
 
+def saludo_fijo(nombre: str | None) -> str:
+    """Saludo con texto fijo — nunca inventa nombres."""
+    import random
+    if nombre:
+        plantilla = random.choice(SALUDOS_CONOCIDO)
+        return plantilla.format(nombre=nombre)
+    return random.choice(SALUDOS_DESCONOCIDO)
+
+
 def generar_respuesta(mensaje: str, nombre_persona: str | None = None) -> str:
+    """Respuesta conversacional con LLM."""
     system = SYSTEM_PROMPT
     if nombre_persona:
-        system += f" The person talking to you is called {nombre_persona}."
+        system += f" The user's name is {nombre_persona}."
 
     agregar_mensaje("user", mensaje)
 
@@ -74,11 +107,13 @@ def generar_respuesta(mensaje: str, nombre_persona: str | None = None) -> str:
             options=OLLAMA_OPTIONS,
         )
         respuesta = resp["message"]["content"].strip()
-        # Limpiar asteriscos y markdown que el modelo a veces añade
         respuesta = re.sub(r"\*+", "", respuesta).strip()
+        # Asegurar que termina en puntuación
+        if respuesta and respuesta[-1] not in ".!?":
+            respuesta += "."
     except Exception as e:
         print(f"[LLM] Error: {e}")
-        respuesta = "Ups, BMO no puede pensar ahora mismo."
+        respuesta = "Ups, BMO no puede pensar ahora."
 
     agregar_mensaje("assistant", respuesta)
     return respuesta

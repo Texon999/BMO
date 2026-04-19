@@ -1,21 +1,24 @@
 """
 BMO — Agente local autónomo
-Máquina de estados limpia inspirada en be-more-agent:
-  WARMUP → IDLE → (cara detectada) → LISTENING → THINKING → SPEAKING → IDLE
 
-El loop principal corre en un hilo separado.
-El hilo de display solo maneja la animación.
+Flujo:
+  1. Warmup
+  2. BMO escucha SIEMPRE (no requiere cara)
+  3. Si detecta cara conocida → usa su nombre como contexto
+  4. Si alguien dice su nombre → inicia registro de cara
+  5. Responde con LLM en loop continuo
 """
 import threading
 import time
 import logging
+import random
 import cv2
 
 from src.display.display import DisplayBMO, Estado
 from src.vision.vision   import VisionBMO
 from src.voice.voice     import VozBMO
-from src.brain.brain     import generar_respuesta, detectar_nombre
-from src.memory.register import guardar_persona, nombres_a_ids
+from src.brain.brain     import generar_respuesta, detectar_nombre, saludo_fijo
+from src.memory.register import nombres_a_ids
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,9 +27,9 @@ logging.basicConfig(
 )
 log = logging.getLogger("BMO")
 
-GREETING_COOLDOWN = 45.0   # segundos entre saludos a la misma persona
-LISTEN_SECONDS    = 4      # segundos máx de grabación
-CAPTURE_FRAMES    = 25     # fotos para registrar un rostro
+LISTEN_SECONDS = 5      # segundos de grabación por turno
+CAPTURE_FRAMES = 25     # fotos para registrar un rostro
+SALUDO_COOLDOWN = 60.0  # segundos entre saludos a la misma persona
 
 
 class AgenteBMO:
@@ -36,156 +39,132 @@ class AgenteBMO:
         self.vision  = VisionBMO(camera_index=0)
         self.voz     = VozBMO()
 
-        self._running = True
+        self._running         = True
+        self._nombre_actual: str | None = None   # nombre detectado por cámara
         self._ultimo_saludo: dict[str, float] = {}
+        self._lock_camara     = threading.Lock()
 
         log.info("=== BMO listo ===")
 
-    # ── Entry point ───────────────────────────────────────────────────────────
-
     def run(self):
-        # Hilo de lógica separado del hilo de display
-        hilo = threading.Thread(target=self._loop_logica, daemon=True)
-        hilo.start()
-
-        # Hilo principal: solo animación + manejo de ventana
+        # Hilo de cámara — actualiza _nombre_actual en segundo plano
+        threading.Thread(target=self._loop_camara, daemon=True).start()
+        # Hilo de lógica — escucha y responde
+        threading.Thread(target=self._loop_logica, daemon=True).start()
+        # Hilo principal — solo animación
         while self._running:
             if not self.display.tick():
                 self._running = False
-        
         self._apagar()
 
-    # ── Loop de lógica (hilo separado) ────────────────────────────────────────
+    # ── Hilo de cámara ────────────────────────────────────────────────────────
+
+    def _loop_camara(self):
+        """Lee la cámara continuamente y actualiza el nombre detectado."""
+        while self._running:
+            ret, frame = self.vision.cap.read()
+            if not ret:
+                time.sleep(0.1)
+                continue
+
+            _, detecciones = self.vision.procesar_rostro(frame)
+            reconocidos = [d["nombre"] for d in detecciones if d["id"] is not None]
+
+            with self._lock_camara:
+                if reconocidos:
+                    self._nombre_actual = reconocidos[0]
+                else:
+                    self._nombre_actual = None
+
+            time.sleep(0.1)  # ~10fps es suficiente para reconocimiento
+
+    # ── Hilo de lógica ────────────────────────────────────────────────────────
 
     def _loop_logica(self):
-        # Warmup
         self.display.set_estado(Estado.WARMUP)
         time.sleep(3.0)
         log.info("BMO despierto")
 
+        # Saludo inicial
+        self.display.set_estado(Estado.SPEAKING)
+        self.voz.hablar("Hola! Soy BMO. Estoy listo para hablar contigo!")
+        self.display.set_estado(Estado.IDLE)
+
         while self._running:
             try:
-                self._ciclo()
+                self._ciclo_escucha()
             except Exception as e:
-                log.error(f"Error en ciclo: {e}")
+                log.error(f"Error: {e}")
                 time.sleep(1.0)
 
-    def _ciclo(self):
-        """Un ciclo completo: detectar cara → saludar → escuchar → responder."""
-        # 1. Esperar a que haya una cara
-        nombre, id_cara = self._esperar_cara()
-        if not self._running:
+    def _ciclo_escucha(self):
+        """Un ciclo: escuchar → procesar → responder."""
+        # Saludo si hay cara conocida nueva
+        with self._lock_camara:
+            nombre_camara = self._nombre_actual
+
+        if nombre_camara:
+            ahora = time.time()
+            if ahora - self._ultimo_saludo.get(nombre_camara, 0) > SALUDO_COOLDOWN:
+                self._ultimo_saludo[nombre_camara] = ahora
+                saludo = saludo_fijo(nombre_camara)
+                log.info(f"Saludando a {nombre_camara}: '{saludo}'")
+                self.display.set_estado(Estado.SPEAKING, nombre=nombre_camara)
+                self.voz.hablar(saludo)
+                self.display.set_estado(Estado.IDLE)
+
+        # Escuchar
+        self.display.set_estado(Estado.LISTENING)
+        texto = self.voz.escuchar(LISTEN_SECONDS)
+
+        if not texto:
+            self.display.set_estado(Estado.IDLE)
+            time.sleep(0.5)
             return
 
-        # 2. Saludar si no lo hemos hecho recientemente
-        clave = nombre or "__desconocido__"
-        ahora = time.time()
-        if ahora - self._ultimo_saludo.get(clave, 0) > GREETING_COOLDOWN:
-            self._ultimo_saludo[clave] = ahora
-            self._saludar(nombre)
+        log.info(f"Escuché: '{texto}'")
 
-        # 3. Escuchar y responder en loop mientras haya cara
-        while self._running:
-            # Verificar que sigue habiendo cara
-            cara_presente, nombre_actual, _ = self._detectar_cara()
-            if not cara_presente:
-                log.info("Cara perdida, volviendo a idle")
-                self.display.set_estado(Estado.IDLE)
-                break
+        # Obtener nombre actual de cámara para contexto
+        with self._lock_camara:
+            nombre_contexto = self._nombre_actual
 
-            # Escuchar
-            self.display.set_estado(Estado.LISTENING)
-            log.info("Escuchando...")
-            texto = self.voz.escuchar(LISTEN_SECONDS)
-
-            if not texto:
-                # Sin audio → pequeña pausa y volver a escuchar
-                self.display.set_estado(Estado.IDLE)
-                time.sleep(1.0)
-                continue
-
-            log.info(f"Escuché: '{texto}'")
-
-            # Detectar si dice su nombre → registrar
-            nombre_nuevo = detectar_nombre(texto)
-            if nombre_nuevo and nombre_nuevo.lower() != (nombre or "").lower():
+        # Detectar si dice su nombre → registrar
+        nombre_nuevo = detectar_nombre(texto)
+        if nombre_nuevo:
+            # No registrar si ya lo conocemos con ese nombre
+            conocidos = list(nombres_a_ids().values())
+            if nombre_nuevo.lower() not in [n.lower() for n in conocidos]:
                 self._registrar_persona(nombre_nuevo)
-                nombre = nombre_nuevo
-                clave  = nombre
-                continue
+                return
+            else:
+                log.info(f"'{nombre_nuevo}' ya está registrado")
 
-            # Responder con LLM
-            self.display.set_estado(Estado.THINKING)
-            log.info("Pensando...")
-            respuesta = generar_respuesta(texto, nombre)
-            log.info(f"BMO: '{respuesta}'")
-
-            self.display.set_estado(Estado.SPEAKING)
-            self.voz.hablar(respuesta)
-            self.display.set_estado(Estado.IDLE)
-
-    # ── Detección de cara ─────────────────────────────────────────────────────
-
-    def _detectar_cara(self) -> tuple[bool, str | None, int | None]:
-        """Lee un frame y devuelve (hay_cara, nombre, id)."""
-        ret, frame = self.vision.cap.read()
-        if not ret:
-            return False, None, None
-        _, detecciones = self.vision.procesar_rostro(frame)
-        reconocidos = [(d["id"], d["nombre"]) for d in detecciones if d["id"] is not None]
-        if reconocidos:
-            id_det, nombre_det = reconocidos[0]
-            return True, nombre_det, id_det
-        # Cara sin reconocer
-        gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = self.vision.face_cascade.detectMultiScale(gray, 1.1, 8, minSize=(60, 60))
-        if len(faces) > 0:
-            return True, None, None
-        return False, None, None
-
-    def _esperar_cara(self) -> tuple[str | None, int | None]:
-        """Bloquea hasta detectar una cara. Devuelve (nombre, id)."""
-        self.display.set_estado(Estado.IDLE)
-        while self._running:
-            hay_cara, nombre, id_cara = self._detectar_cara()
-            if hay_cara:
-                log.info(f"Cara detectada: {nombre or 'desconocido'}")
-                if nombre:
-                    self.display.set_estado(Estado.IDLE, nombre=nombre)
-                return nombre, id_cara
-            time.sleep(0.1)
-        return None, None
-
-    # ── Saludo ────────────────────────────────────────────────────────────────
-
-    def _saludar(self, nombre: str | None):
-        log.info(f"Saludando a: {nombre or 'desconocido'}")
+        # Responder con LLM
         self.display.set_estado(Estado.THINKING)
+        log.info(f"Pensando... (contexto: {nombre_contexto or 'ninguno'})")
+        respuesta = generar_respuesta(texto, nombre_contexto)
+        log.info(f"BMO: '{respuesta}'")
 
-        if nombre:
-            prompt = f"Saluda a {nombre} que acaba de aparecer. Muy breve y entusiasta."
-        else:
-            # Sin nombre: saludo simple + pregunta el nombre
-            prompt = "Saluda a alguien nuevo y preguntale su nombre. Solo 1 oracion."
-
-        respuesta = generar_respuesta(prompt, nombre)
-        log.info(f"Saludo: '{respuesta}'")
-        self.display.set_estado(Estado.SPEAKING, nombre=nombre)
+        self.display.set_estado(Estado.SPEAKING, nombre=nombre_contexto)
         self.voz.hablar(respuesta)
         self.display.set_estado(Estado.IDLE)
 
-    # ── Registro ──────────────────────────────────────────────────────────────
+    # ── Registro de persona ───────────────────────────────────────────────────
 
     def _registrar_persona(self, nombre: str):
-        log.info(f"Registrando: '{nombre}'")
+        log.info(f"Iniciando registro: '{nombre}'")
         siguiente_id = self.vision.siguiente_id()
 
+        # Instrucciones claras
         self.display.set_estado(Estado.SPEAKING)
-        self.voz.hablar(f"Genial! Voy a recordar tu cara {nombre}. Mira hacia aqui!")
+        self.voz.hablar(f"Hola {nombre}! Voy a recordar tu cara. Quedate quieto y mirame!")
+        time.sleep(0.5)
+        self.voz.hablar("Capturando en tres, dos, uno!")
         self.display.set_estado(Estado.LISTENING)
 
         capturas = []
-        timeout  = time.time() + 12
+        timeout  = time.time() + 15
+        log.info(f"Capturando {CAPTURE_FRAMES} fotos...")
 
         while len(capturas) < CAPTURE_FRAMES and time.time() < timeout:
             ret, f = self.vision.cap.read()
@@ -197,15 +176,19 @@ class AgenteBMO:
             for (x, y, w, h) in faces:
                 roi = cv2.resize(gray[y:y+h, x:x+w], (200, 200))
                 capturas.append(roi)
-            time.sleep(0.05)
+                if len(capturas) % 5 == 0:
+                    log.info(f"  {len(capturas)}/{CAPTURE_FRAMES} fotos")
+            time.sleep(0.04)
 
-        if capturas:
+        if len(capturas) >= 10:
             self.vision.aprender_rostro(siguiente_id, nombre, capturas)
-            log.info(f"Registro exitoso: {nombre} (ID {siguiente_id})")
+            log.info(f"Registro exitoso: {nombre} (ID {siguiente_id}, {len(capturas)} fotos)")
+            self._ultimo_saludo[nombre] = time.time()
             self.display.set_estado(Estado.SPEAKING, nombre=nombre)
-            self.voz.hablar(f"Listo! Ya te recuerdo, {nombre}. Hora de aventura!")
+            self.voz.hablar(f"Listo {nombre}! Ya te tengo en mi memoria. Hora de aventura!")
         else:
-            log.warning("No se capturaron fotos")
+            log.warning(f"Pocas fotos capturadas: {len(capturas)}")
+            self.display.set_estado(Estado.SPEAKING)
             self.voz.hablar("Hmm, no pude verte bien. Intentalo de nuevo!")
 
         self.display.set_estado(Estado.IDLE)
