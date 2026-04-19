@@ -33,7 +33,7 @@ log = logging.getLogger("BMO")
 # ── Configuración ─────────────────────────────────────────────────────────────
 IDLE_TIMEOUT      = 3.0   # segundos sin cara antes de volver a idle puro
 GREETING_COOLDOWN = 30.0  # segundos entre saludos a la misma persona
-LISTEN_SECONDS    = 5     # segundos de grabación por turno
+LISTEN_SECONDS    = 3     # segundos de grabación (VAD corta antes si hay silencio)
 CAPTURE_FRAMES    = 25    # fotos para registrar un rostro
 
 

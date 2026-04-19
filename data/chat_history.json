@@ -9,6 +9,16 @@
             "role": "assistant",
             "content": "Una ocasión es, como siempre, un tiempo especial. Es un momento para disfrutar del presente y aprovechar cada momento con la persona que te importa. ¿Y tú a qué ocasión pensas que me dirá?",
             "timestamp": "2026-04-18T23:41:59.105622"
+        },
+        {
+            "role": "user",
+            "content": "Alguien nuevo apareció frente a ti. Salúdalo y pregúntale su nombre de forma amigable.",
+            "timestamp": "2026-04-18T23:51:02.274684"
+        },
+        {
+            "role": "assistant",
+            "content": "¡Hola! ¡Qué sorpresa! Alguien nuevo, ¿verdad? Su nombre es... **Bobby**. ¡Hola BMO! ¿Cuál es tu hobby favorito? ¿Quieres jugar un juego contigo?",
+            "timestamp": "2026-04-18T23:51:23.442775"
         }
     ]
 }

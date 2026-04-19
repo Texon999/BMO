@@ -14,7 +14,7 @@ from faster_whisper import WhisperModel
 WHISPER_MODEL  = "tiny"
 WHISPER_LANG   = "es"
 SAMPLE_RATE    = 16000
-RECORD_SECONDS = 5
+RECORD_SECONDS = 3   # 3s máximo — si hay silencio VAD lo corta antes
 
 VOICE_ONNX   = Path("voices/es_ES-sharvard-medium.onnx")
 VOICE_CONFIG = Path("voices/es_ES-sharvard-medium.onnx.json")
@@ -102,7 +102,8 @@ class VozBMO:
             buf.seek(0)
             data, sr = sf.read(buf, dtype="float32")
             print(f"[TTS] Reproduciendo {len(data)/sr:.1f}s de audio @ {sr}Hz")
-            sd.play(data, sr)
+            # Usar dispositivo de salida por defecto del sistema (incluye audífonos)
+            sd.play(data, sr, device=sd.default.device[1])
             sd.wait()
             print("[TTS] Reproducción completa")
         except Exception as e:

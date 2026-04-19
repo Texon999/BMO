@@ -12,7 +12,7 @@ from enum import Enum, auto
 FACE_DIR   = Path("assets/faces")
 WIN_NAME   = "BMO"
 WIN_W, WIN_H = 480, 480
-FPS_ANIM   = 8   # frames por segundo de animación
+FPS_ANIM   = 4   # frames por segundo de animación (pocas imágenes → más lento)
 
 
 class Estado(Enum):
