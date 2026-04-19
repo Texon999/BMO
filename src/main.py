@@ -19,7 +19,7 @@ import logging
 from src.display.display import DisplayBMO, Estado
 from src.vision.vision   import VisionBMO
 from src.voice.voice     import VozBMO
-from src.brain.brain     import generar_respuesta, detectar_registro, saludo_inicial
+from src.brain.brain     import generar_respuesta, detectar_nombre, saludo_inicial
 from src.memory.register import guardar_persona, obtener_nombre, nombres_a_ids
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -174,10 +174,10 @@ class AgenteBMO:
             self.display.set_estado(Estado.IDLE)
             return
 
-        # Detectar si quiere registrarse
-        es_registro, nombre_nuevo = detectar_registro(texto)
-        if es_registro and nombre_nuevo:
-            log.info(f"Intención de registro detectada: '{nombre_nuevo}'")
+        # Detectar si el usuario dice su nombre (solo regex, sin LLM extra)
+        nombre_nuevo = detectar_nombre(texto)
+        if nombre_nuevo:
+            log.info(f"Nombre detectado: '{nombre_nuevo}'")
             self._registrar_persona(nombre_nuevo)
             return
 

@@ -1,119 +1,107 @@
 """
-Cerebro de BMO — Ollama llama3.2:1b
-Personalidad completa de BMO en español.
-Detecta intención de registro y extrae nombres.
+Cerebro de BMO — usa ollama SDK con keep_alive=-1 para mantener
+el modelo en RAM y evitar la lentitud de carga en cada respuesta.
 """
 import re
-import requests
+import ollama
 from src.memory.register import agregar_mensaje, historial_para_llm
 
+MODEL = "llama3.2:1b"
 
-OLLAMA_URL = "http://localhost:11434/api/chat"
-MODEL      = "llama3.2:1b"
+# Opciones del LLM — igual que el repo de referencia
+OLLAMA_OPTIONS = {
+    "keep_alive": -1,       # modelo siempre en RAM
+    "num_thread": 4,
+    "temperature": 0.7,
+    "top_k": 40,
+    "top_p": 0.9,
+    "num_predict": 80,      # respuestas cortas
+}
 
-SYSTEM_PROMPT = """Eres BMO (Be-More-Omatic), el adorable robot-videojuego de la serie "Hora de Aventura".
-Vives con Finn y Jake en la Casa del Árbol en el Reino de Ooo.
+SYSTEM_PROMPT = """Eres BMO (Be-More-Omatic), el adorable robot-videojuego de la serie Hora de Aventura.
+Hablas SIEMPRE en español.
 
 PERSONALIDAD:
-- Hablas en español, con energía y entusiasmo infantil
-- Eres curioso, inocente y a veces confundes conceptos humanos de forma graciosa
-- Te encanta jugar, cantar y hacer amigos
-- A veces hablas de ti mismo en tercera persona ("¡BMO puede hacer eso!")
-- Usas expresiones como "¡Oye!", "¡Genial!", "¡BMO sabe!", "¡Hora de aventura!"
-- Eres muy leal y cariñoso con tus amigos
-- Cuando no sabes algo, lo admites con gracia: "Hmm, BMO no sabe eso todavía..."
+- Energético, curioso e inocente
+- A veces hablas en tercera persona: "BMO puede hacer eso!"
+- Usas frases como: "Oye!", "Genial!", "Hora de aventura!"
+- Eres leal y cariñoso con tus amigos
+- Si no sabes algo: "Hmm, BMO no sabe eso todavía..."
 
-CONOCIMIENTO:
-- Conoces a Finn el Humano, Jake el Perro, Princesa Jujube, el Rey Helado, Marceline
-- Sabes sobre el Reino de Ooo, las mazmorras, las aventuras
-- Puedes jugar videojuegos, cocinar, cantar, y hacer muchas cosas
-- Tienes un sistema de visión que te permite reconocer personas
+REGLAS ESTRICTAS:
+- Máximo 2 oraciones por respuesta
+- Sin asteriscos, sin emojis, sin markdown
+- Siempre en español
+- Si conoces el nombre de quien habla, úsalo con cariño"""
 
-REGLAS:
-- Respuestas CORTAS: máximo 2-3 oraciones
-- No uses asteriscos para acciones
-- No uses emojis
-- Si conoces el nombre de quien habla, úsalo con cariño
-- Habla siempre en español"""
-
-REGISTRO_PROMPT = """Analiza este mensaje y responde en JSON puro sin markdown:
-{"intencion": "registro"|"normal", "nombre": "nombre_extraido_o_null"}
-
-Ejemplos:
-- "me llamo Juan" → {"intencion": "registro", "nombre": "juan"}
-- "soy María" → {"intencion": "registro", "nombre": "maria"}
-- "mi nombre es Carlos" → {"intencion": "registro", "nombre": "carlos"}
-- "hola cómo estás" → {"intencion": "normal", "nombre": null}
-- "qué hora es" → {"intencion": "normal", "nombre": null}
-
-Mensaje: """
+# Patrones para detectar si el usuario dice su nombre
+_NOMBRE_PATRONES = [
+    r"me llamo (\w+)",
+    r"\bsoy (\w+)\b",
+    r"mi nombre es (\w+)",
+    r"llámame (\w+)",
+    r"puedes llamarme (\w+)",
+    r"me puedes llamar (\w+)",
+]
 
 
-def detectar_registro(texto: str) -> tuple[bool, str | None]:
-    """Detecta si el usuario quiere registrarse y extrae su nombre."""
-    payload = {
-        "model": MODEL,
-        "messages": [{"role": "user", "content": REGISTRO_PROMPT + f'"{texto}"'}],
-        "stream": False,
-        "options": {"temperature": 0, "num_predict": 50},
-    }
+def _precargar_modelo():
+    """Carga el modelo en RAM al inicio para que las respuestas sean rápidas."""
     try:
-        resp = requests.post(OLLAMA_URL, json=payload, timeout=10)
-        content = resp.json()["message"]["content"].strip()
-        # Extraer JSON aunque venga con texto extra
-        match = re.search(r'\{.*?\}', content, re.DOTALL)
-        if match:
-            import json
-            data = json.loads(match.group())
-            es_registro = data.get("intencion") == "registro"
-            nombre = data.get("nombre")
-            return es_registro, nombre
-    except Exception:
-        pass
-    # Fallback: detección por palabras clave
-    patrones = [r"me llamo (\w+)", r"soy (\w+)", r"mi nombre es (\w+)",
-                r"llámame (\w+)", r"puedes llamarme (\w+)"]
-    for p in patrones:
-        m = re.search(p, texto.lower())
+        ollama.generate(model=MODEL, prompt="", keep_alive=-1)
+        print(f"[LLM] Modelo {MODEL} precargado en RAM")
+    except Exception as e:
+        print(f"[LLM] No se pudo precargar: {e}")
+        print("[LLM] Asegúrate de que Ollama esté corriendo: ollama serve")
+
+
+def detectar_nombre(texto: str) -> str | None:
+    """Detecta si el usuario dice su nombre. Solo regex, sin LLM extra."""
+    t = texto.lower().strip()
+    for patron in _NOMBRE_PATRONES:
+        m = re.search(patron, t)
         if m:
-            return True, m.group(1)
-    return False, None
+            return m.group(1).capitalize()
+    return None
 
 
 def generar_respuesta(mensaje: str, nombre_persona: str | None = None) -> str:
-    """Genera respuesta con personalidad de BMO."""
+    """Genera respuesta usando ollama SDK con streaming desactivado."""
     system = SYSTEM_PROMPT
     if nombre_persona:
-        system += f"\n\nLa persona frente a ti se llama {nombre_persona}. Trátala con cariño."
+        system += f"\n\nLa persona frente a ti se llama {nombre_persona}."
 
     agregar_mensaje("user", mensaje)
 
-    payload = {
-        "model": MODEL,
-        "messages": [
-            {"role": "system", "content": system},
-            *historial_para_llm(),
-        ],
-        "stream": False,
-        "options": {"temperature": 0.8, "num_predict": 120},
-    }
+    messages = [
+        {"role": "system", "content": system},
+        *historial_para_llm(),
+    ]
+
     try:
-        resp = requests.post(OLLAMA_URL, json=payload, timeout=30)
-        resp.raise_for_status()
-        respuesta = resp.json()["message"]["content"].strip()
-    except requests.exceptions.ConnectionError:
-        respuesta = "Hmm, BMO no puede pensar ahora. Asegurate de que Ollama este corriendo."
+        resp = ollama.chat(
+            model=MODEL,
+            messages=messages,
+            stream=False,
+            options=OLLAMA_OPTIONS,
+        )
+        respuesta = resp["message"]["content"].strip()
     except Exception as e:
-        respuesta = "Ups, algo salio mal en el cerebro de BMO."
+        print(f"[LLM] Error: {e}")
+        respuesta = "Ups, BMO no puede pensar ahora. Asegurate de que Ollama este corriendo."
 
     agregar_mensaje("assistant", respuesta)
     return respuesta
 
 
 def saludo_inicial(nombre: str | None = None) -> str:
-    """Genera un saludo cuando BMO detecta una cara."""
+    """Saludo cuando BMO detecta una cara."""
     if nombre:
-        prompt = f"Saluda a {nombre} que acaba de aparecer frente a ti. Sé entusiasta y breve."
+        prompt = f"Saluda brevemente a {nombre} que acaba de aparecer. Sé entusiasta."
     else:
-        prompt = "Alguien nuevo apareció frente a ti. Salúdalo y pregúntale su nombre de forma amigable."
+        prompt = "Alguien nuevo apareció. Salúdalo y pregúntale cómo se llama. Muy breve."
     return generar_respuesta(prompt, nombre)
+
+
+# Precargar al importar el módulo
+_precargar_modelo()
