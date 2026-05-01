@@ -176,6 +176,9 @@ class VozBMO:
                 return
             audio_np = np.concatenate([c.audio_float_array for c in chunks])
             sr       = chunks[0].sample_rate
+            # Agregar 0.3s de silencio al final para que no se corte la última palabra
+            silencio = np.zeros(int(0.3 * sr), dtype="float32")
+            audio_np = np.concatenate([audio_np, silencio])
             print(f"[TTS] {len(audio_np)/sr:.1f}s")
             sd.play(audio_np, sr)
             sd.wait()
