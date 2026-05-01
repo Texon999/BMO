@@ -76,6 +76,21 @@ class ConfigManager:
             # Visión
             "vision_process_every_n": VISION_PROCESS_EVERY_N,
             
+            # Sistema Híbrido de Conocimiento Factual
+            "hybrid_mode_enabled": False,
+            "fact_database_path": "data/facts/",
+            "classification_thresholds": {
+                "flag_colors": 0.8,
+                "natural_sciences": 0.75,
+                "specific_geography": 0.7,
+                "historical_dates": 0.7,
+                "default": 0.6
+            },
+            "hybrid_fallback_strategy": "llm_normal",
+            "hybrid_response_blending": True,
+            "hybrid_cache_enabled": True,
+            "hybrid_cache_size": 100,
+            
             # Configuración avanzada
             "debug_mode": False,
             "log_level": "INFO",
@@ -218,7 +233,8 @@ class ConfigManager:
             "llm_top_p": (0.0, 1.0),
             "llm_num_predict": (10, 1000),
             "vad_threshold": (0.001, 1.0),
-            "max_conversations": (1, 100)
+            "max_conversations": (1, 100),
+            "hybrid_cache_size": (10, 1000)
         }
         
         for key, (min_val, max_val) in numeric_ranges.items():
@@ -229,6 +245,27 @@ class ConfigManager:
                     self.config[key] = default_val
                     validations.append(f"{key}: {value} -> {default_val} (out of range)")
         
+        # Validar umbrales de clasificación híbrida
+        if "classification_thresholds" in self.config:
+            thresholds = self.config["classification_thresholds"]
+            if isinstance(thresholds, dict):
+                for category, threshold in thresholds.items():
+                    if not isinstance(threshold, (int, float)) or not (0.0 <= threshold <= 1.0):
+                        default_threshold = self.default_config["classification_thresholds"].get(category, 0.6)
+                        thresholds[category] = default_threshold
+                        validations.append(f"classification_thresholds.{category}: {threshold} -> {default_threshold}")
+            else:
+                self.config["classification_thresholds"] = self.default_config["classification_thresholds"]
+                validations.append("classification_thresholds: Invalid format, reset to default")
+        
+        # Validar estrategia de fallback
+        valid_fallback_strategies = ["llm_normal", "llm_enhanced", "error_response"]
+        if "hybrid_fallback_strategy" in self.config:
+            strategy = self.config["hybrid_fallback_strategy"]
+            if strategy not in valid_fallback_strategies:
+                self.config["hybrid_fallback_strategy"] = "llm_normal"
+                validations.append(f"hybrid_fallback_strategy: {strategy} -> llm_normal (invalid)")
+        
         # Validar archivos existentes
         file_keys = ["voice_model"]
         for key in file_keys:
@@ -237,8 +274,20 @@ class ConfigManager:
                 if not file_path.exists():
                     validations.append(f"{key}: File not found: {self.config[key]}")
         
+        # Validar directorio de base de datos de hechos
+        if "fact_database_path" in self.config and self.config["fact_database_path"]:
+            db_path = Path(self.config["fact_database_path"])
+            if not db_path.exists():
+                # Crear directorio si no existe
+                try:
+                    db_path.mkdir(parents=True, exist_ok=True)
+                    validations.append(f"fact_database_path: Created directory {db_path}")
+                except Exception as e:
+                    validations.append(f"fact_database_path: Could not create {db_path}: {e}")
+        
         if validations:
             log.warning(f"[CONFIG] Validation corrections: {', '.join(validations)}")
+    
     
     def get_ollama_options(self) -> Dict[str, Any]:
         """Obtiene las opciones para Ollama"""
@@ -264,7 +313,75 @@ class ConfigManager:
             "llm_temperature": self.get("llm_temperature"),
             "llm_num_predict": self.get("llm_num_predict"),
             "chat_memory": self.get("chat_memory"),
-            "debug_mode": self.get("debug_mode")
+            "debug_mode": self.get("debug_mode"),
+            "hybrid_mode_enabled": self.get("hybrid_mode_enabled")
+        }
+    
+    # Métodos específicos para el Sistema Híbrido
+    
+    def is_hybrid_mode_enabled(self) -> bool:
+        """Verifica si el modo híbrido está habilitado"""
+        return self.get("hybrid_mode_enabled", False)
+    
+    def get_fact_database_path(self) -> str:
+        """Obtiene la ruta de la base de datos de hechos"""
+        return self.get("fact_database_path", "data/facts/")
+    
+    def get_classification_thresholds(self) -> Dict[str, float]:
+        """Obtiene los umbrales de clasificación para el sistema híbrido"""
+        return self.get("classification_thresholds", {
+            "flag_colors": 0.8,
+            "natural_sciences": 0.75,
+            "specific_geography": 0.7,
+            "historical_dates": 0.7,
+            "default": 0.6
+        })
+    
+    def get_classification_threshold(self, category: str) -> float:
+        """Obtiene el umbral de clasificación para una categoría específica"""
+        thresholds = self.get_classification_thresholds()
+        return thresholds.get(category, thresholds.get("default", 0.6))
+    
+    def get_hybrid_fallback_strategy(self) -> str:
+        """Obtiene la estrategia de fallback del sistema híbrido"""
+        return self.get("hybrid_fallback_strategy", "llm_normal")
+    
+    def is_hybrid_response_blending_enabled(self) -> bool:
+        """Verifica si el blending de respuestas está habilitado"""
+        return self.get("hybrid_response_blending", True)
+    
+    def is_hybrid_cache_enabled(self) -> bool:
+        """Verifica si el cache híbrido está habilitado"""
+        return self.get("hybrid_cache_enabled", True)
+    
+    def get_hybrid_cache_size(self) -> int:
+        """Obtiene el tamaño del cache híbrido"""
+        return self.get("hybrid_cache_size", 100)
+    
+    def set_hybrid_mode(self, enabled: bool, save: bool = True) -> bool:
+        """Activa o desactiva el modo híbrido"""
+        return self.set("hybrid_mode_enabled", enabled, save)
+    
+    def update_classification_threshold(self, category: str, threshold: float, save: bool = True) -> bool:
+        """Actualiza el umbral de clasificación para una categoría"""
+        if not (0.0 <= threshold <= 1.0):
+            log.error(f"[CONFIG] Invalid threshold value: {threshold}. Must be between 0.0 and 1.0")
+            return False
+        
+        thresholds = self.get_classification_thresholds()
+        thresholds[category] = threshold
+        return self.set("classification_thresholds", thresholds, save)
+    
+    def get_hybrid_config_summary(self) -> Dict[str, Any]:
+        """Obtiene un resumen específico de la configuración híbrida"""
+        return {
+            "hybrid_mode_enabled": self.is_hybrid_mode_enabled(),
+            "fact_database_path": self.get_fact_database_path(),
+            "classification_thresholds": self.get_classification_thresholds(),
+            "fallback_strategy": self.get_hybrid_fallback_strategy(),
+            "response_blending": self.is_hybrid_response_blending_enabled(),
+            "cache_enabled": self.is_hybrid_cache_enabled(),
+            "cache_size": self.get_hybrid_cache_size()
         }
 
 # Instancia global

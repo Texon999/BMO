@@ -1,0 +1,219 @@
+{
+  "metadata": {
+    "name": "Ciencias Naturales Básicas",
+    "description": "Hechos científicos verificados de astronomía, biología, química y física",
+    "version": "1.0.0",
+    "last_updated": "2024-01-15",
+    "source": "Fuentes científicas verificadas y libros de texto"
+  },
+  "facts": [
+    {
+      "key": "planeta-mas-grande-sistema-solar",
+      "question_patterns": [
+        "cuál es el planeta más grande del sistema solar",
+        "planeta más grande",
+        "qué planeta es el más grande"
+      ],
+      "verified_answer": "Júpiter es el planeta más grande del sistema solar, con un diámetro de aproximadamente 143.000 kilómetros",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "NASA - Sistema Solar",
+      "aliases": ["júpiter", "jupiter", "sistema solar"]
+    },
+    {
+      "key": "planetas-sistema-solar",
+      "question_patterns": [
+        "cuántos planetas hay en el sistema solar",
+        "número de planetas",
+        "cuántos planetas tiene el sistema solar"
+      ],
+      "verified_answer": "El sistema solar tiene ocho planetas: Mercurio, Venus, Tierra, Marte, Júpiter, Saturno, Urano y Neptuno",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "Unión Astronómica Internacional, 2006",
+      "aliases": ["planetas", "sistema solar"]
+    },
+    {
+      "key": "planeta-mas-cercano-sol",
+      "question_patterns": [
+        "cuál es el planeta más cercano al sol",
+        "planeta más cercano al sol",
+        "qué planeta está más cerca del sol"
+      ],
+      "verified_answer": "Mercurio es el planeta más cercano al Sol, a una distancia promedio de 58 millones de kilómetros",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "NASA - Sistema Solar",
+      "aliases": ["mercurio", "sol", "sistema solar"]
+    },
+    {
+      "key": "animal-mas-grande-mundo",
+      "question_patterns": [
+        "cuál es el animal más grande del mundo",
+        "animal más grande",
+        "qué animal es el más grande"
+      ],
+      "verified_answer": "La ballena azul es el animal más grande del mundo, pudiendo alcanzar hasta 30 metros de longitud y pesar más de 170 toneladas",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "National Geographic - Ballena Azul",
+      "aliases": ["ballena azul", "ballena", "animal"]
+    },
+    {
+      "key": "animal-terrestre-mas-rapido",
+      "question_patterns": [
+        "cuál es el animal terrestre más rápido",
+        "animal más rápido",
+        "qué animal corre más rápido"
+      ],
+      "verified_answer": "El guepardo es el animal terrestre más rápido, pudiendo alcanzar velocidades de hasta 120 km/h en distancias cortas",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "National Geographic - Guepardo",
+      "aliases": ["guepardo", "chita", "animal"]
+    },
+    {
+      "key": "organo-mas-grande-cuerpo-humano",
+      "question_patterns": [
+        "cuál es el órgano más grande del cuerpo humano",
+        "órgano más grande",
+        "qué órgano es el más grande"
+      ],
+      "verified_answer": "La piel es el órgano más grande del cuerpo humano, cubriendo aproximadamente 2 metros cuadrados en un adulto promedio",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "Anatomía Humana - Gray's Anatomy",
+      "aliases": ["piel", "órgano", "cuerpo humano"]
+    },
+    {
+      "key": "huesos-cuerpo-humano",
+      "question_patterns": [
+        "cuántos huesos tiene el cuerpo humano",
+        "número de huesos",
+        "cuántos huesos tenemos"
+      ],
+      "verified_answer": "El cuerpo humano adulto tiene 206 huesos. Los bebés nacen con aproximadamente 270 huesos, pero muchos se fusionan durante el crecimiento",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "Anatomía Humana - Gray's Anatomy",
+      "aliases": ["huesos", "esqueleto", "cuerpo humano"]
+    },
+    {
+      "key": "gas-respiramos",
+      "question_patterns": [
+        "qué gas respiramos",
+        "cuál es el gas que respiramos",
+        "qué gas necesitamos para vivir"
+      ],
+      "verified_answer": "El oxígeno es el gas que respiramos y necesitamos para vivir. Representa aproximadamente el 21% del aire que inhalamos",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "Fisiología Respiratoria",
+      "aliases": ["oxígeno", "oxigeno", "respiración"]
+    },
+    {
+      "key": "temperatura-ebullicion-agua",
+      "question_patterns": [
+        "a qué temperatura hierve el agua",
+        "temperatura de ebullición del agua",
+        "cuándo hierve el agua"
+      ],
+      "verified_answer": "El agua hierve a 100 grados Celsius (212 grados Fahrenheit) al nivel del mar y presión atmosférica normal",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "Química General - Propiedades del Agua",
+      "aliases": ["agua", "ebullición", "temperatura"]
+    },
+    {
+      "key": "metal-mas-abundante-tierra",
+      "question_patterns": [
+        "cuál es el metal más abundante en la tierra",
+        "metal más abundante",
+        "qué metal hay más en la tierra"
+      ],
+      "verified_answer": "El aluminio es el metal más abundante en la corteza terrestre, representando aproximadamente el 8% de su composición",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "Geología - Composición de la Corteza Terrestre",
+      "aliases": ["aluminio", "metal", "tierra"]
+    },
+    {
+      "key": "velocidad-luz",
+      "question_patterns": [
+        "cuál es la velocidad de la luz",
+        "velocidad de la luz",
+        "a qué velocidad viaja la luz"
+      ],
+      "verified_answer": "La velocidad de la luz en el vacío es de aproximadamente 299.792 kilómetros por segundo (300.000 km/s)",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "Física - Constantes Fundamentales",
+      "aliases": ["luz", "velocidad", "física"]
+    },
+    {
+      "key": "cromosomas-humanos",
+      "question_patterns": [
+        "cuántos cromosomas tiene el ser humano",
+        "número de cromosomas",
+        "cuántos cromosomas tenemos"
+      ],
+      "verified_answer": "El ser humano tiene 46 cromosomas organizados en 23 pares. Cada célula somática contiene este número completo",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "Genética Humana",
+      "aliases": ["cromosomas", "genética", "adn"]
+    },
+    {
+      "key": "continentes-mundo",
+      "question_patterns": [
+        "cuántos continentes hay",
+        "número de continentes",
+        "cuántos continentes tiene el mundo"
+      ],
+      "verified_answer": "Hay siete continentes en el mundo: África, América del Norte, América del Sur, Antártida, Asia, Europa y Oceanía",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "Geografía Mundial",
+      "aliases": ["continentes", "mundo", "geografía"]
+    },
+    {
+      "key": "oceano-mas-grande",
+      "question_patterns": [
+        "cuál es el océano más grande",
+        "océano más grande",
+        "qué océano es el más grande"
+      ],
+      "verified_answer": "El Océano Pacífico es el más grande del mundo, cubriendo aproximadamente 165 millones de kilómetros cuadrados",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "Oceanografía",
+      "aliases": ["océano pacífico", "pacifico", "océano"]
+    },
+    {
+      "key": "fotosintesis",
+      "question_patterns": [
+        "qué es la fotosíntesis",
+        "cómo funciona la fotosíntesis",
+        "qué es la fotosintesis"
+      ],
+      "verified_answer": "La fotosíntesis es el proceso mediante el cual las plantas convierten la luz solar, agua y dióxido de carbono en glucosa y oxígeno",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "Biología Vegetal",
+      "aliases": ["fotosíntesis", "fotosintesis", "plantas"]
+    },
+    {
+      "key": "adn-significado",
+      "question_patterns": [
+        "qué significa adn",
+        "qué es el adn",
+        "significado de adn"
+      ],
+      "verified_answer": "ADN significa Ácido Desoxirribonucleico. Es la molécula que contiene la información genética de los seres vivos",
+      "confidence_level": 0.98,
+      "category": "natural_sciences",
+      "source": "Biología Molecular",
+      "aliases": ["adn", "ácido desoxirribonucleico", "genética"]
+    }
+  ]
+}

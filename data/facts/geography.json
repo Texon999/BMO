@@ -1,0 +1,128 @@
+{
+  "metadata": {
+    "name": "Geografía Específica",
+    "description": "Hechos geográficos verificados sobre capitales, países y lugares",
+    "version": "1.0.0",
+    "last_updated": "2024-01-15",
+    "source": "Fuentes oficiales y atlas geográficos"
+  },
+  "facts": [
+    {
+      "key": "capital-brasil",
+      "question_patterns": [
+        "cuál es la capital de brasil",
+        "capital de brasil",
+        "qué ciudad es la capital de brasil"
+      ],
+      "verified_answer": "Brasilia es la capital de Brasil desde 1960. No es Río de Janeiro ni São Paulo",
+      "confidence_level": 0.98,
+      "category": "specific_geography",
+      "source": "Constitución de Brasil",
+      "aliases": ["brasil", "brasilia", "capital"]
+    },
+    {
+      "key": "capital-kazajistan",
+      "question_patterns": [
+        "cuál es la capital de kazajistán",
+        "capital de kazajistán",
+        "qué ciudad es la capital de kazajistán"
+      ],
+      "verified_answer": "Astaná (anteriormente Nur-Sultan) es la capital de Kazajistán desde 1997. Almaty fue la capital anterior",
+      "confidence_level": 0.98,
+      "category": "specific_geography",
+      "source": "Gobierno de Kazajistán",
+      "aliases": ["kazajistán", "kazajistan", "astaná", "astana", "nur-sultan"]
+    },
+    {
+      "key": "pais-mas-grande-mundo",
+      "question_patterns": [
+        "cuál es el país más grande del mundo",
+        "país más grande",
+        "qué país es el más grande"
+      ],
+      "verified_answer": "Rusia es el país más grande del mundo por superficie, con aproximadamente 17,1 millones de kilómetros cuadrados",
+      "confidence_level": 0.98,
+      "category": "specific_geography",
+      "source": "Atlas Mundial",
+      "aliases": ["rusia", "federación rusa", "país"]
+    },
+    {
+      "key": "rio-mas-largo-mundo",
+      "question_patterns": [
+        "cuál es el río más largo del mundo",
+        "río más largo",
+        "qué río es el más largo"
+      ],
+      "verified_answer": "El Nilo es considerado el río más largo del mundo con aproximadamente 6.650 kilómetros, aunque algunos estudios sugieren que el Amazonas podría ser más largo",
+      "confidence_level": 0.95,
+      "category": "specific_geography",
+      "source": "Geografía Física Mundial",
+      "aliases": ["nilo", "río", "amazonas"]
+    },
+    {
+      "key": "montana-mas-alta-mundo",
+      "question_patterns": [
+        "cuál es la montaña más alta del mundo",
+        "montaña más alta",
+        "qué montaña es la más alta"
+      ],
+      "verified_answer": "El Monte Everest es la montaña más alta del mundo, con 8.849 metros sobre el nivel del mar",
+      "confidence_level": 0.98,
+      "category": "specific_geography",
+      "source": "Survey of Nepal",
+      "aliases": ["everest", "monte everest", "montaña"]
+    },
+    {
+      "key": "desierto-mas-grande-mundo",
+      "question_patterns": [
+        "cuál es el desierto más grande del mundo",
+        "desierto más grande",
+        "qué desierto es el más grande"
+      ],
+      "verified_answer": "La Antártida es técnicamente el desierto más grande del mundo (desierto polar). El Sahara es el desierto cálido más grande",
+      "confidence_level": 0.95,
+      "category": "specific_geography",
+      "source": "Geografía Física",
+      "aliases": ["antártida", "sahara", "desierto"]
+    },
+    {
+      "key": "lago-mas-profundo-mundo",
+      "question_patterns": [
+        "cuál es el lago más profundo del mundo",
+        "lago más profundo",
+        "qué lago es el más profundo"
+      ],
+      "verified_answer": "El Lago Baikal en Rusia es el lago más profundo del mundo, con una profundidad máxima de 1.642 metros",
+      "confidence_level": 0.98,
+      "category": "specific_geography",
+      "source": "Limnología",
+      "aliases": ["baikal", "lago baikal", "lago"]
+    },
+    {
+      "key": "continente-egipto",
+      "question_patterns": [
+        "en qué continente está egipto",
+        "continente de egipto",
+        "dónde está egipto"
+      ],
+      "verified_answer": "Egipto está ubicado en el continente africano, aunque una pequeña parte (Península del Sinaí) está en Asia",
+      "confidence_level": 0.98,
+      "category": "specific_geography",
+      "source": "Geografía Mundial",
+      "aliases": ["egipto", "áfrica", "africa"]
+    },
+    {
+      "key": "continente-turquia",
+      "question_patterns": [
+        "en qué continente está turquía",
+        "continente de turquía",
+        "dónde está turquía"
+      ],
+      "verified_answer": "Turquía es un país transcontinental ubicado principalmente en Asia (Anatolia) con una pequeña parte en Europa (Tracia)",
+      "confidence_level": 0.98,
+      "category": "specific_geography",
+      "source": "Geografía Mundial",
+      "aliases": ["turquía", "turquia", "asia", "europa"]
+    }
+  ]
+}

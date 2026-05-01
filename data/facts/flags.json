@@ -1,0 +1,221 @@
+{
+  "metadata": {
+    "name": "Banderas de Países",
+    "description": "Hechos verificados sobre colores y diseños de banderas nacionales",
+    "version": "1.0.0",
+    "last_updated": "2024-01-15",
+    "source": "Fuentes oficiales gubernamentales y vexilología"
+  },
+  "facts": [
+    {
+      "key": "bandera-colombia-colores",
+      "question_patterns": [
+        "colores de la bandera de colombia",
+        "qué colores tiene la bandera colombiana",
+        "de qué color es la bandera de colombia",
+        "cuáles son los colores de la bandera de colombia"
+      ],
+      "verified_answer": "La bandera de Colombia tiene tres franjas horizontales: amarilla (arriba, doble ancho), azul (medio) y roja (abajo)",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Constitución Política de Colombia, Artículo 4",
+      "aliases": ["colombia", "república de colombia", "colombiana"]
+    },
+    {
+      "key": "bandera-mexico-colores",
+      "question_patterns": [
+        "colores de la bandera de méxico",
+        "qué colores tiene la bandera mexicana",
+        "de qué color es la bandera de méxico",
+        "cuáles son los colores de la bandera de méxico"
+      ],
+      "verified_answer": "La bandera de México tiene tres franjas verticales: verde (izquierda), blanco (centro con escudo nacional) y rojo (derecha)",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Ley sobre el Escudo, la Bandera y el Himno Nacionales de México",
+      "aliases": ["méxico", "mexico", "mexicana", "estados unidos mexicanos"]
+    },
+    {
+      "key": "bandera-espana-colores",
+      "question_patterns": [
+        "colores de la bandera de españa",
+        "qué colores tiene la bandera española",
+        "de qué color es la bandera de españa",
+        "cuáles son los colores de la bandera de españa"
+      ],
+      "verified_answer": "La bandera de España tiene tres franjas horizontales: roja (arriba), amarilla (centro, doble ancho con escudo) y roja (abajo)",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Constitución Española de 1978, Artículo 4.1",
+      "aliases": ["españa", "espana", "española", "reino de españa"]
+    },
+    {
+      "key": "bandera-francia-colores",
+      "question_patterns": [
+        "colores de la bandera de francia",
+        "qué colores tiene la bandera francesa",
+        "de qué color es la bandera de francia",
+        "cuáles son los colores de la bandera de francia"
+      ],
+      "verified_answer": "La bandera de Francia tiene tres franjas verticales: azul (izquierda), blanco (centro) y rojo (derecha)",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Constitución Francesa, Artículo 2",
+      "aliases": ["francia", "francesa", "república francesa"]
+    },
+    {
+      "key": "bandera-italia-colores",
+      "question_patterns": [
+        "colores de la bandera de italia",
+        "qué colores tiene la bandera italiana",
+        "de qué color es la bandera de italia",
+        "cuáles son los colores de la bandera de italia"
+      ],
+      "verified_answer": "La bandera de Italia tiene tres franjas verticales: verde (izquierda), blanco (centro) y rojo (derecha)",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Constitución de la República Italiana, Artículo 12",
+      "aliases": ["italia", "italiana", "república italiana"]
+    },
+    {
+      "key": "bandera-alemania-colores",
+      "question_patterns": [
+        "colores de la bandera de alemania",
+        "qué colores tiene la bandera alemana",
+        "de qué color es la bandera de alemania",
+        "cuáles son los colores de la bandera de alemania"
+      ],
+      "verified_answer": "La bandera de Alemania tiene tres franjas horizontales: negro (arriba), rojo (centro) y amarillo dorado (abajo)",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Ley Fundamental de la República Federal de Alemania, Artículo 22",
+      "aliases": ["alemania", "alemana", "república federal de alemania"]
+    },
+    {
+      "key": "bandera-brasil-colores",
+      "question_patterns": [
+        "colores de la bandera de brasil",
+        "qué colores tiene la bandera brasileña",
+        "de qué color es la bandera de brasil",
+        "cuáles son los colores de la bandera de brasil"
+      ],
+      "verified_answer": "La bandera de Brasil tiene fondo verde con un rombo amarillo en el centro, dentro del cual hay un círculo azul con estrellas blancas y una banda blanca con el lema 'Ordem e Progresso'",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Ley 5.700 de Brasil sobre símbolos nacionales",
+      "aliases": ["brasil", "brasileña", "república federativa del brasil"]
+    },
+    {
+      "key": "bandera-argentina-colores",
+      "question_patterns": [
+        "colores de la bandera de argentina",
+        "qué colores tiene la bandera argentina",
+        "de qué color es la bandera de argentina",
+        "cuáles son los colores de la bandera de argentina"
+      ],
+      "verified_answer": "La bandera de Argentina tiene tres franjas horizontales: celeste (arriba), blanca (centro con sol de mayo) y celeste (abajo)",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Ley 23.208 de Argentina sobre símbolos nacionales",
+      "aliases": ["argentina", "argentina", "república argentina"]
+    },
+    {
+      "key": "bandera-reino-unido-colores",
+      "question_patterns": [
+        "colores de la bandera del reino unido",
+        "qué colores tiene la bandera británica",
+        "de qué color es la bandera de inglaterra",
+        "cuáles son los colores de la union jack"
+      ],
+      "verified_answer": "La bandera del Reino Unido (Union Jack) combina las cruces de San Jorge (roja sobre blanco), San Andrés (blanca en diagonal sobre azul) y San Patricio (roja en diagonal sobre blanco)",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Flag Institute del Reino Unido",
+      "aliases": ["reino unido", "inglaterra", "gran bretaña", "británica", "union jack"]
+    },
+    {
+      "key": "bandera-estados-unidos-colores",
+      "question_patterns": [
+        "colores de la bandera de estados unidos",
+        "qué colores tiene la bandera estadounidense",
+        "de qué color es la bandera de usa",
+        "cuáles son los colores de la bandera americana"
+      ],
+      "verified_answer": "La bandera de Estados Unidos tiene 13 franjas horizontales alternadas (7 rojas y 6 blancas) y un cantón azul con 50 estrellas blancas",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Código de los Estados Unidos, Título 4, Capítulo 1",
+      "aliases": ["estados unidos", "usa", "eeuu", "américa", "estadounidense", "americana"]
+    },
+    {
+      "key": "bandera-canada-colores",
+      "question_patterns": [
+        "colores de la bandera de canadá",
+        "qué colores tiene la bandera canadiense",
+        "de qué color es la bandera de canada",
+        "cuáles son los colores de la bandera de canadá"
+      ],
+      "verified_answer": "La bandera de Canadá tiene tres franjas verticales: roja (izquierda), blanca (centro con hoja de arce roja) y roja (derecha)",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Proclamación de la Bandera Nacional de Canadá, 1965",
+      "aliases": ["canadá", "canada", "canadiense"]
+    },
+    {
+      "key": "bandera-japon-colores",
+      "question_patterns": [
+        "colores de la bandera de japón",
+        "qué colores tiene la bandera japonesa",
+        "de qué color es la bandera de japon",
+        "cuáles son los colores de la bandera de japón"
+      ],
+      "verified_answer": "La bandera de Japón tiene un círculo rojo (sol naciente) en el centro sobre fondo blanco",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Ley de la Bandera y el Himno Nacional de Japón, 1999",
+      "aliases": ["japón", "japon", "japonesa", "nipón"]
+    },
+    {
+      "key": "bandera-china-colores",
+      "question_patterns": [
+        "colores de la bandera de china",
+        "qué colores tiene la bandera china",
+        "de qué color es la bandera de china",
+        "cuáles son los colores de la bandera de china"
+      ],
+      "verified_answer": "La bandera de China tiene fondo rojo con cinco estrellas amarillas en la esquina superior izquierda (una grande y cuatro pequeñas)",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Constitución de la República Popular China, Artículo 141",
+      "aliases": ["china", "china", "república popular china"]
+    },
+    {
+      "key": "bandera-india-colores",
+      "question_patterns": [
+        "colores de la bandera de india",
+        "qué colores tiene la bandera india",
+        "de qué color es la bandera de india",
+        "cuáles son los colores de la bandera de india"
+      ],
+      "verified_answer": "La bandera de India tiene tres franjas horizontales: azafrán (arriba), blanco (centro con rueda azul de Ashoka) y verde (abajo)",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Código de la Bandera de India, 2002",
+      "aliases": ["india", "india", "república de la india"]
+    },
+    {
+      "key": "bandera-australia-colores",
+      "question_patterns": [
+        "colores de la bandera de australia",
+        "qué colores tiene la bandera australiana",
+        "de qué color es la bandera de australia",
+        "cuáles son los colores de la bandera de australia"
+      ],
+      "verified_answer": "La bandera de Australia tiene fondo azul con la Union Jack en el cantón superior izquierdo, la Estrella de la Commonwealth debajo y la constelación de la Cruz del Sur a la derecha (estrellas blancas)",
+      "confidence_level": 0.95,
+      "category": "flag_colors",
+      "source": "Ley de Banderas de Australia, 1953",
+      "aliases": ["australia", "australiana", "commonwealth de australia"]
+    }
+  ]
+}
