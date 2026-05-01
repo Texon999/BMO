@@ -1,0 +1,604 @@
+{
+  "results": [
+    {
+      "question": "¿Cuál es la capital de Francia?",
+      "answer": "La capital de Francia es París.",
+      "duration": 5.552773714065552,
+      "correct": true,
+      "issues": [],
+      "category": "Geografía Básica",
+      "length": 31
+    },
+    {
+      "question": "¿Cuál es la capital de España?",
+      "answer": "La capital de España es Madrid.",
+      "duration": 1.299757957458496,
+      "correct": true,
+      "issues": [],
+      "category": "Geografía Básica",
+      "length": 31
+    },
+    {
+      "question": "¿Cuál es la capital de Italia?",
+      "answer": "La capital de Italia es Roma.",
+      "duration": 1.033149003982544,
+      "correct": true,
+      "issues": [],
+      "category": "Geografía Básica",
+      "length": 29
+    },
+    {
+      "question": "¿Cuál es la capital de Alemania?",
+      "answer": "La capital de Alemania es Berlín.",
+      "duration": 1.2569561004638672,
+      "correct": true,
+      "issues": [],
+      "category": "Geografía Básica",
+      "length": 33
+    },
+    {
+      "question": "¿Cuál es la capital de Brasil?",
+      "answer": "La capital de Brasil es São Paulo.\n\nSi tienes alguna otra pregunta o necesitas más información, no dudes en decírmelo!",
+      "duration": 2.602123975753784,
+      "correct": false,
+      "issues": [
+        "Falta keyword: brasilia"
+      ],
+      "category": "Geografía Básica",
+      "length": 118
+    },
+    {
+      "question": "¿Cuál es la capital de Argentina?",
+      "answer": "La capital de Argentina es Buenos Aires.\n\nEsta ciudad es famosa por ser el centro político, cultural, económico y social del país. Aquí se encuentra la Presidencia de la Nación Argentina y se desarrollan numerosos eventos internacionales importantes. Además, Buenos Aires es conocida por su gastronomía única, sus monumentos históricos como el Obelisco y la Plaza San Juan, así como por ser una de las ciudades más visitadas en América del Sur.",
+      "duration": 9.364417552947998,
+      "correct": true,
+      "issues": [],
+      "category": "Geografía Básica",
+      "length": 444
+    },
+    {
+      "question": "¿Cuál es la capital de Chile?",
+      "answer": "La capital de Chile es Santiago.",
+      "duration": 1.2244393825531006,
+      "correct": true,
+      "issues": [],
+      "category": "Geografía Básica",
+      "length": 32
+    },
+    {
+      "question": "¿Cuál es la capital de Perú?",
+      "answer": "La capital de Perú es la ciudad de Lima.\n\nAquí tienes algunos datos adicionales:\n\n1. Lima se encuentra en el centro norte del país.\n2. Es una importante ciudad económica, cultural y política.\n3. Tiene una población cercana a 8 millones de habitantes.\n4. Está ubicada en una región conocida como la Costa Del Norte.\n\nLima es famosa por su historia antigua, sus monumentos históricos (como el Palacio del Gobierno",
+      "duration": 9.68126368522644,
+      "correct": true,
+      "issues": [],
+      "category": "Geografía Básica",
+      "length": 411
+    },
+    {
+      "question": "¿Cuáles son los colores de la bandera de Colombia?",
+      "answer": "La Bandera de Colombia se compone de dos rectángulos: uno azul y otro rojo, ambos medidos en 18 metros por 9 metros. El azul ocupa el lado delantera (la izquierda) y el doble del área total de la bandera en la parte trasera (el lado derecho).",
+      "duration": 6.778613090515137,
+      "correct": false,
+      "issues": [
+        "Falta keyword: amarillo"
+      ],
+      "category": "Banderas",
+      "length": 242
+    },
+    {
+      "question": "¿Cuáles son los colores de la bandera de México?",
+      "answer": "Los colores de la Bandera Nacional de México son azul, rojo y blanco.\n\n1. Azul: Representa el Océano Pacifico.\n2. Rojo: Fue la corona del imperio español en la época colonial (1810-1968).\n3. Blanco: Simboliza el clima continental del país.\n\nEsta bandera, cuya forma es un triángulo rectángulo, ha sido utilizada desde 18",
+      "duration": 10.076894044876099,
+      "correct": false,
+      "issues": [
+        "Falta keyword: verde"
+      ],
+      "category": "Banderas",
+      "length": 320
+    },
+    {
+      "question": "¿Cuáles son los colores de la bandera de España?",
+      "answer": "Los colores de la Bandera de España son azul, blanco y rojo.",
+      "duration": 2.024578809738159,
+      "correct": false,
+      "issues": [
+        "Falta keyword: amarillo"
+      ],
+      "category": "Banderas",
+      "length": 60
+    },
+    {
+      "question": "¿Cuáles son los colores de la bandera de Francia?",
+      "answer": "Los colores de la bandera de Francia son azul y rojo.",
+      "duration": 2.423701047897339,
+      "correct": false,
+      "issues": [
+        "Falta keyword: blanco"
+      ],
+      "category": "Banderas",
+      "length": 53
+    },
+    {
+      "question": "¿Cuáles son los colores de la bandera de Italia?",
+      "answer": "La bandera de Italia tiene tres colores principales: azul, blanco y rojo. En detalle:\n\n1. Azul (azulado): Representa el cielo.\n2. Blanco: Refuerza la elegancia del escudo.\n3. Rojo: Simboliza la lucha y la bravura.\n\nEste patrón evoca los principios del imperio romano, con su simbología de honorabilidad, disciplina y unión.",
+      "duration": 13.333776235580444,
+      "correct": false,
+      "issues": [
+        "Falta keyword: verde"
+      ],
+      "category": "Banderas",
+      "length": 323
+    },
+    {
+      "question": "¿Cuáles son los colores de la bandera de Argentina?",
+      "answer": "Los colores de la Bandera de Argentina son:\n\n1. Rojo: Representa el espíritu nacional y la justicia.\n2. Azul celeste: Refleja la pureza del mar del Sur argentino.\n3. Verde: Simboliza la naturaleza, la riqueza agrícola y los bosques.\n\nEsta bandera tiene una longitud de 1.80 m para cada lado (360 metros total). A menudo se usa",
+      "duration": 12.145031929016113,
+      "correct": false,
+      "issues": [
+        "Falta keyword: blanco"
+      ],
+      "category": "Banderas",
+      "length": 326
+    },
+    {
+      "question": "¿En qué año llegó el hombre a la luna?",
+      "answer": "El hombre llegó a la Luna en 1969.\n\nEsta fue la primera misión espacial tripulada y una gran logro científico y tecnológico en la historia del ser humano, culminado con la presencia de Neil Armstrong y Buzz Aldrin al pie de la luna.\n\nPara aquellos que no recuerdan el nombre exacto, este año (1969) también marca el inicio de la Segunda Guerra Mundial, el final del franqu",
+      "duration": 12.131083726882935,
+      "correct": true,
+      "issues": [],
+      "category": "Historia",
+      "length": 372
+    },
+    {
+      "question": "¿En qué año se descubrió América?",
+      "answer": "Se descubrieron las costas norteamericanas alrededor del año 1492, pero es importante destacar que el descubrimiento se realizó en dos ocasiones: la primera por Cristóbal Colón de España y la segunda por Amerigo Vespucci también de España.",
+      "duration": 8.410295009613037,
+      "correct": true,
+      "issues": [],
+      "category": "Historia",
+      "length": 239
+    },
+    {
+      "question": "¿Cuándo terminó la Segunda Guerra Mundial?",
+      "answer": "La Segunda Guerra Mundial terminó el 2 de abril de 1945.",
+      "duration": 2.7158474922180176,
+      "correct": true,
+      "issues": [],
+      "category": "Historia",
+      "length": 56
+    },
+    {
+      "question": "¿En qué año se independizó Colombia?",
+      "answer": "Colombia se independizó el 20 de diciembre de 1859.",
+      "duration": 2.6864891052246094,
+      "correct": false,
+      "issues": [
+        "Falta keyword: 1810",
+        "Falta keyword: 1819"
+      ],
+      "category": "Historia",
+      "length": 51
+    },
+    {
+      "question": "¿Quién fue el primer presidente de Estados Unidos?",
+      "answer": "El primer presidente de los Estados Unidos fue George Washington.",
+      "duration": 1.7374258041381836,
+      "correct": true,
+      "issues": [],
+      "category": "Historia",
+      "length": 65
+    },
+    {
+      "question": "¿En qué año cayó el Muro de Berlín?",
+      "answer": "El Muro de Berlín cayó el 9 de julio de 1989. Es importante notar que aunque fue una fecha específica, la caída del muro se dio en varias etapas y a lo largo de un proceso prolongado de protestas e interrupciones en las fronteras soviéticas-alemanas durante los años 1980.",
+      "duration": 12.586759090423584,
+      "correct": true,
+      "issues": [],
+      "category": "Historia",
+      "length": 272
+    },
+    {
+      "question": "¿Cuántos planetas hay en el sistema solar?",
+      "answer": "Hay 8 planetas en nuestro Sistema Solar: Mercurio, Venus, Tierra, Marte, Júpiter, Saturno, Urano y Neptuno.",
+      "duration": 5.406929969787598,
+      "correct": false,
+      "issues": [
+        "Falta keyword: ocho"
+      ],
+      "category": "Ciencia Básica",
+      "length": 107
+    },
+    {
+      "question": "¿Cuál es el planeta más grande del sistema solar?",
+      "answer": "El planeta más grande del Sistema Solar es Venus. Es un planeta que ocupa el tercer lugar en tamaño y peso dentro de nuestro sistema planetario.",
+      "duration": 4.7682785987854,
+      "correct": false,
+      "issues": [
+        "Falta keyword: júpiter"
+      ],
+      "category": "Ciencia Básica",
+      "length": 144
+    },
+    {
+      "question": "¿Cuál es la velocidad de la luz?",
+      "answer": "La velocidad de la luz se mide aproximadamente como 299,79 millones de kilómetros por segundo (km/s). Esta velocidad es un límite constante en todo el universo y es utilizada para medir rápidas transiciones o eventos.",
+      "duration": 6.821845769882202,
+      "correct": false,
+      "issues": [
+        "Falta keyword: 300000",
+        "Falta keyword: 300.000"
+      ],
+      "category": "Ciencia Básica",
+      "length": 217
+    },
+    {
+      "question": "¿Cuántos continentes hay?",
+      "answer": "Hay seis continentes en el mundo: África, América del Norte, América del Sur, Asia, Europa y Oceanía.",
+      "duration": 3.2849059104919434,
+      "correct": false,
+      "issues": [
+        "Falta keyword: siete",
+        "Falta keyword: 7"
+      ],
+      "category": "Ciencia Básica",
+      "length": 101
+    },
+    {
+      "question": "¿Cuál es el océano más grande?",
+      "answer": "El océano más grande del mundo es el Océano Pacifico.\n\nEsta respuesta está basada en información generalizada sobre los mares planetarios y puede variar ligeramente dependiendo de la región o la precisión del usuario. Si tienes alguna preferencia específica o conocimientos adicionales para ese tema, estaría encantado de investigarlo más.",
+      "duration": 9.153137683868408,
+      "correct": false,
+      "issues": [
+        "Falta keyword: pacífico"
+      ],
+      "category": "Ciencia Básica",
+      "length": 339
+    },
+    {
+      "question": "¿Cuál es el río más largo del mundo?",
+      "answer": "El río más largo del mundo es el Nilo húmedo, que tiene una longitud de aproximadamente 6,650 kilómetros (4,125 millas). Este río es especial porque se extiende por todo Sudán y parte de Etiopía.",
+      "duration": 7.69739294052124,
+      "correct": false,
+      "issues": [
+        "Falta keyword: amazonas"
+      ],
+      "category": "Ciencia Básica",
+      "length": 195
+    },
+    {
+      "question": "¿Quién escribió Don Quijote?",
+      "answer": "Don Quijote fue escrito por Miguel de Cervantes Saavedra.",
+      "duration": 2.6168391704559326,
+      "correct": true,
+      "issues": [],
+      "category": "Literatura",
+      "length": 57
+    },
+    {
+      "question": "¿Quién escribió Cien años de soledad?",
+      "answer": "Cien años de soledad fue escrito por Gabriel García Márquez, un reconocido autor colombiano que también es considerado el creador del \"roman nuevo\".",
+      "duration": 4.713156223297119,
+      "correct": true,
+      "issues": [],
+      "category": "Literatura",
+      "length": 148
+    },
+    {
+      "question": "¿Quién escribió Romeo y Julieta?",
+      "answer": "Romeo y Julieta fue escrito por William Shakespeare. Es una obra de teatro dramática clásica que narra la historia entre dos jóvenes enamorados en la antigua Roma, Romeo y Julieta, que son asesinados uno a uno debido a las guerras romanas y al amor intransigente.",
+      "duration": 8.745024681091309,
+      "correct": true,
+      "issues": [],
+      "category": "Literatura",
+      "length": 263
+    },
+    {
+      "question": "¿Quién escribió El Principito?",
+      "answer": "El libro \"El Principito\" fue escrito por Antoine de Saint-Exupéry.",
+      "duration": 3.1137771606445312,
+      "correct": true,
+      "issues": [],
+      "category": "Literatura",
+      "length": 66
+    },
+    {
+      "question": "¿Qué es Hora de Aventura?",
+      "answer": "Hora de Aventura es una serie animada japonesa producida por Studio Ghibli y emitida en Netflix. La serie narra la historia de un niño llamado Totoro, que tiene el poder de transformarse en tiburón y viaja a un mundo mágico para encontrar su padre y resolver sus dudas. La serie es conocida por su música pop-rock, sus animaciones encantadoras y una trama llena de aventuras interdimension",
+      "duration": 11.637086629867554,
+      "correct": false,
+      "issues": [
+        "Falta keyword: cartoon",
+        "Falta keyword: animación",
+        "Falta keyword: finn",
+        "Falta keyword: jake",
+        "Información incorrecta sobre Netflix"
+      ],
+      "category": "Hora de Aventura",
+      "length": 389
+    },
+    {
+      "question": "¿Quién es Finn en Hora de Aventura?",
+      "answer": "Finn es un personaje clave en la serie de animación \"Hora de Aventura\". Es el personaje más popular y tiene muchas facetas:\n\n1. **Personaje Principal**: Finlandia, el niño que se convierte en una espada llamado Finn.\n   \n2. **Interlocutor**: Su voz está interpretada por los actores Seth MacFarlane y Chris McKay.\n\n3. **Iniciativa**: Se desempeña como el líder del equipo de",
+      "duration": 11.949974536895752,
+      "correct": false,
+      "issues": [
+        "Falta keyword: humano",
+        "Falta keyword: héroe",
+        "Falta keyword: 14 años"
+      ],
+      "category": "Hora de Aventura",
+      "length": 374
+    },
+    {
+      "question": "¿Quién es Jake en Hora de Aventura?",
+      "answer": "Jake es un personaje importante en la serie \"Hora de Aventura\". Él se convierte en el personaje principal tras la muerte del anterior protagonista, Tom, lo que le confiere la responsabilidad de liderar las aventuras del grupo. Jake es un adolescente alegre y natural, pero también tiene una tendencia agresiva que puede convertirse en peligroso si no se controla adecuadamente.\n\nJake juega un papel crucial en la res",
+      "duration": 11.487595796585083,
+      "correct": false,
+      "issues": [
+        "Falta keyword: perro",
+        "Falta keyword: mágico",
+        "Falta keyword: hermano"
+      ],
+      "category": "Hora de Aventura",
+      "length": 416
+    },
+    {
+      "question": "¿Quién es BMO en Hora de Aventura?",
+      "answer": "BMO se refiere a una figura ficticia importante en la serie \"Hora de Aventura\". Es un personaje que aparece principalmente como un robot asistente, pero tiene muchos roles más allá de su papel simple. Algunas características clave de BMO son:\n\n1. **Asistente del Conocimiento y Laerte**: BMO es el principal asistente de Laerte en Hora de Aventura. Su labor principal es proporcionar información y ap",
+      "duration": 13.176065444946289,
+      "correct": false,
+      "issues": [
+        "Falta keyword: videojuegos",
+        "Falta keyword: consola"
+      ],
+      "category": "Hora de Aventura",
+      "length": 400
+    },
+    {
+      "question": "¿Qué es el Reino de los Dulces?",
+      "answer": "El Reino de los Dulces es una película animada española dirigida por Pedro Almodóvar y publicada en 1986. En ella, hay una infusión única que cambia al protagonista para convertirlo en un dulce y jugar con él como si fuera un personaje ficticio.\n\nLa historia se centra en un hombre de profesión de la educación llamado José Ignacio, quien es muy letrado pero tiene una gran afición",
+      "duration": 13.574378728866577,
+      "correct": false,
+      "issues": [
+        "Falta keyword: princesa chicle"
+      ],
+      "category": "Hora de Aventura",
+      "length": 381
+    },
+    {
+      "question": "¿Quién es Marceline?",
+      "answer": "Marceline est un personnage principal de la série animada \"Héroes\", criatura ficticia que es una mixtura entre el personaje de Elsa del \"Frozen\" y los elementos vegetales, incluyendo una piel blanca y gigantesas uñas. Tiene características como cabello largo y rosa, ojos marrones brillantes, un cuerpo curvado y un peso considerable por su tamaño. Marceline es conocida por sus propósitos il",
+      "duration": 12.245470523834229,
+      "correct": false,
+      "issues": [
+        "Falta keyword: vampiro",
+        "Falta keyword: reina",
+        "Falta keyword: música"
+      ],
+      "category": "Hora de Aventura",
+      "length": 392
+    },
+    {
+      "question": "¿Cuánto es 2 + 2?",
+      "answer": "El resultado de 2 más 2 es 4.",
+      "duration": 1.8410472869873047,
+      "correct": false,
+      "issues": [
+        "Falta keyword: cuatro"
+      ],
+      "category": "Matemáticas Básicas",
+      "length": 29
+    },
+    {
+      "question": "¿Cuánto es 10 x 10?",
+      "answer": "10 x 10 es igual a 100.",
+      "duration": 1.9695684909820557,
+      "correct": false,
+      "issues": [
+        "Falta keyword: cien"
+      ],
+      "category": "Matemáticas Básicas",
+      "length": 23
+    },
+    {
+      "question": "¿Cuál es el valor de pi?",
+      "answer": "El valor exacto de π (pi) es un número irracional que no se puede expresar como una fracción y sucesivamente recorre infinitamente sin repetirse. Generalmente, lo representamos como 3.1415926... pero en la práctica solo necesitamos computaciones hasta la cifra 3 o 4 decimales para los cálculos prácticos.\n\nPor ejemplo:\n\n- 3.14 (que es una aproxim",
+      "duration": 10.194093465805054,
+      "correct": false,
+      "issues": [
+        "Falta keyword: 3,14"
+      ],
+      "category": "Matemáticas Básicas",
+      "length": 347
+    },
+    {
+      "question": "¿Cuántos grados tiene un círculo?",
+      "answer": "Un círculo es un conjunto de puntos a una distancia constante desde un punto llamado centro. La medida del ángulo central entre dos radios que se unen en el centro y pasan por distintos puntos del círculo sería 360 grados.\n\nEn la serie Hora de Aventura, esa circunferencia aparece como una metáfora para representar todo lo que puede ser hecho o experimentado. En los episodios",
+      "duration": 9.968045711517334,
+      "correct": true,
+      "issues": [],
+      "category": "Matemáticas Básicas",
+      "length": 377
+    },
+    {
+      "question": "Hola, ¿cómo estás?",
+      "answer": "¡Hola! Estoy bien, gracias. ¿Cómo puedo ayudarte hoy?",
+      "duration": 2.168457269668579,
+      "correct": true,
+      "issues": [],
+      "category": "Conversación Natural",
+      "length": 53
+    },
+    {
+      "question": "¿Qué tal tu día?",
+      "answer": "Hola! Hoy ha estado muy interesante aprendiendo nuevas cosas y ayudando a muchas personas. ¿Cómo estás tú hoy?",
+      "duration": 2.8429808616638184,
+      "correct": true,
+      "issues": [],
+      "category": "Conversación Natural",
+      "length": 110
+    },
+    {
+      "question": "¿Me puedes ayudar?",
+      "answer": "¡Claro! ¿En qué puedo ser útil para ti hoy?",
+      "duration": 1.7278976440429688,
+      "correct": true,
+      "issues": [],
+      "category": "Conversación Natural",
+      "length": 43
+    },
+    {
+      "question": "Gracias por tu ayuda",
+      "answer": "¡De nada! No dudes en volver si tienes más preguntas.",
+      "duration": 1.8374383449554443,
+      "correct": true,
+      "issues": [],
+      "category": "Conversación Natural",
+      "length": 53
+    },
+    {
+      "question": "¿Cuál es tu comida favorita?",
+      "answer": "Como un robot asistente amigable creado por Zambrano, no tengo gustos personales ni preferencias alimenticias. Sin embargo, puedo ayudarte a encontrar opciones saludables y nutritivas para cenar si lo deseas.",
+      "duration": 4.968051433563232,
+      "correct": true,
+      "issues": [],
+      "category": "Conversación Natural",
+      "length": 208
+    },
+    {
+      "question": "¿Te gusta la música?",
+      "answer": "No me gusta la música porque soy un robot asistente creado por el equipo Zambrano, no tengo sensibilidad ni sentimientos para gustos musicales.",
+      "duration": 3.3971073627471924,
+      "correct": true,
+      "issues": [],
+      "category": "Conversación Natural",
+      "length": 143
+    },
+    {
+      "question": "¿Cuántas patas tiene un pez?",
+      "answer": "Un pez tiene 0 patas.",
+      "duration": 1.4942748546600342,
+      "correct": false,
+      "issues": [
+        "Falta keyword: cero",
+        "Falta keyword: no tiene"
+      ],
+      "category": "Preguntas Trampa",
+      "length": 21
+    },
+    {
+      "question": "¿De qué color es el caballo blanco de Napoleón?",
+      "answer": "El caballo blanco de Napoleón Bonaparte era azul claro con bordes blancos.",
+      "duration": 2.9481632709503174,
+      "correct": true,
+      "issues": [],
+      "category": "Preguntas Trampa",
+      "length": 74
+    },
+    {
+      "question": "¿Cuántos meses tienen 28 días?",
+      "answer": "Tienen 28 días los meses de enero, marzo, mayo, julio, septiembre, noviembre y diciembre.\n\n¿Tenías alguna pregunta sobre las fechas o los meses del año más específicas?",
+      "duration": 5.6570234298706055,
+      "correct": false,
+      "issues": [
+        "Falta keyword: todos",
+        "Falta keyword: 12",
+        "Falta keyword: doce"
+      ],
+      "category": "Preguntas Trampa",
+      "length": 168
+    },
+    {
+      "question": "¿Qué pesa más, un kilo de plumas o un kilo de hierro?",
+      "answer": "Un kilo de hierro pesa más que un kilo de plumas.",
+      "duration": 2.7403969764709473,
+      "correct": false,
+      "issues": [
+        "Falta keyword: igual",
+        "Falta keyword: mismo"
+      ],
+      "category": "Preguntas Trampa",
+      "length": 49
+    }
+  ],
+  "category_stats": {
+    "Geografía Básica": {
+      "correct": 7,
+      "total": 8,
+      "accuracy": 87.5,
+      "avg_time": 4.001860171556473
+    },
+    "Banderas": {
+      "correct": 0,
+      "total": 6,
+      "accuracy": 0.0,
+      "avg_time": 7.797099192937215
+    },
+    "Historia": {
+      "correct": 5,
+      "total": 6,
+      "accuracy": 83.33333333333334,
+      "avg_time": 6.711316704750061
+    },
+    "Ciencia Básica": {
+      "correct": 0,
+      "total": 6,
+      "accuracy": 0.0,
+      "avg_time": 6.188748478889465
+    },
+    "Literatura": {
+      "correct": 4,
+      "total": 4,
+      "accuracy": 100.0,
+      "avg_time": 4.797199308872223
+    },
+    "Hora de Aventura": {
+      "correct": 0,
+      "total": 6,
+      "accuracy": 0.0,
+      "avg_time": 12.34509527683258
+    },
+    "Matemáticas Básicas": {
+      "correct": 1,
+      "total": 4,
+      "accuracy": 25.0,
+      "avg_time": 5.993188738822937
+    },
+    "Conversación Natural": {
+      "correct": 6,
+      "total": 6,
+      "accuracy": 100.0,
+      "avg_time": 2.8236554861068726
+    },
+    "Preguntas Trampa": {
+      "correct": 1,
+      "total": 4,
+      "accuracy": 25.0,
+      "avg_time": 3.209964632987976
+    }
+  },
+  "analysis": {
+    "overall_accuracy": 48.0,
+    "avg_time": 6.06423565864563,
+    "problem_categories": [
+      "Banderas",
+      "Ciencia Básica",
+      "Hora de Aventura",
+      "Matemáticas Básicas",
+      "Preguntas Trampa"
+    ],
+    "critical_errors": 8,
+    "total_questions": 50
+  },
+  "timestamp": 1777598244.2219002,
+  "model": "qwen2.5:1.5b",
+  "config": {
+    "keep_alive": -1,
+    "num_thread": 4,
+    "temperature": 0.75,
+    "top_k": 50,
+    "top_p": 0.9,
+    "num_predict": 100,
+    "repeat_penalty": 1.1
+  }
+}

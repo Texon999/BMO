@@ -1,10 +1,28 @@
 """
-Módulo de voz de BMO.
-STT : faster-whisper base (español)
-TTS : piper-tts es_ES-sharvard-medium
+Módulo de voz de BMO — Entrada (STT) y salida (TTS) de audio.
 
-Grabación por VAD — solo graba cuando detecta voz activa,
-para en cuanto hay silencio. No graba en loop fijo.
+STT — Reconocimiento de voz:
+  Usa faster-whisper con el modelo configurado (por defecto: base, español).
+  La grabación funciona con VAD (detección de actividad de voz):
+    - Espera en silencio hasta detectar voz (nivel > VAD_THRESHOLD)
+    - Graba mientras hay voz activa
+    - Termina cuando hay VAD_SILENCE_SEC segundos de silencio
+    - O cuando se alcanza VAD_MAX_SEC segundos de grabación
+  Esto evita grabar en loop fijo y reduce el tiempo de espera.
+
+TTS — Síntesis de voz:
+  Usa Piper TTS con la voz es_ES-sharvard-medium (español de España).
+  El archivo de voz debe estar en voices/es_ES-sharvard-medium.onnx.
+  Si no existe, BMO solo imprime el texto en consola (modo silencioso).
+  Se agrega un pequeño silencio al final de cada oración para evitar cortes.
+
+Autodetección de micrófono:
+  Si MIC_DEVICE = -1, prueba cada dispositivo de entrada disponible
+  grabando 0.3 segundos y verificando que capture audio real.
+  Usa el primero que funcione.
+
+Configuración:
+  Todos los parámetros se leen desde src/config/runtime.py via variables de entorno.
 """
 import json
 import time
@@ -12,22 +30,20 @@ import numpy as np
 import sounddevice as sd
 from pathlib import Path
 from faster_whisper import WhisperModel
-
-# ── Configuración ─────────────────────────────────────────────────────────────
-WHISPER_MODEL = "base"
-WHISPER_LANG  = "es"
-SAMPLE_RATE   = 16000
-
-# Dispositivo de entrada — índice del micrófono que funciona
-# -1 = autodetectar el primero que capte audio
-MIC_DEVICE    = -1
-
-# VAD settings
-VAD_THRESHOLD      = 0.015   # nivel mínimo para considerar que hay voz
-VAD_SILENCE_SEC    = 1.2     # segundos de silencio para terminar grabación
-VAD_MAX_SEC        = 10.0    # máximo de grabación por turno
-VAD_MIN_SEC        = 0.3     # mínimo de audio para procesar
-CHUNK_SEC          = 0.05    # tamaño de chunk de lectura (50ms)
+from src.config.runtime import (
+    WHISPER_MODEL,
+    WHISPER_LANG,
+    SAMPLE_RATE,
+    MIC_DEVICE,
+    OUTPUT_DEVICE,
+    STT_BEAM_SIZE,
+    STT_BEST_OF,
+    VAD_THRESHOLD,
+    VAD_SILENCE_SEC,
+    VAD_MAX_SEC,
+    VAD_MIN_SEC,
+    CHUNK_SEC,
+)
 
 VOICE_ONNX   = Path("voices/es_ES-sharvard-medium.onnx")
 VOICE_CONFIG = Path("voices/es_ES-sharvard-medium.onnx.json")
@@ -35,9 +51,9 @@ VOICE_CONFIG = Path("voices/es_ES-sharvard-medium.onnx.json")
 
 def _encontrar_microfono() -> int:
     """Encuentra el primer micrófono que realmente capta audio."""
-    candidatos = list(range(sd.query_hostapis()[0].get("devices", [None]).__class__.__len__
-                            if False else 30))
-    for idx in range(30):
+    devices = sd.query_devices()
+    candidatos = [i for i, d in enumerate(devices) if d.get("max_input_channels", 0) > 0]
+    for idx in candidatos:
         try:
             info = sd.query_devices(idx)
             if info["max_input_channels"] < 1:
@@ -52,7 +68,8 @@ def _encontrar_microfono() -> int:
         except Exception:
             continue
     print("[MIC] No se encontró micrófono funcional, usando default")
-    return sd.default.device[0]
+    default_in = sd.default.device[0]
+    return default_in if default_in is not None else 0
 
 
 class VozBMO:
@@ -67,6 +84,10 @@ class VozBMO:
         else:
             self._mic = mic_device
             print(f"[MIC] Usando dispositivo [{mic_device}]: {sd.query_devices(mic_device)['name']}")
+
+        if OUTPUT_DEVICE >= 0:
+            sd.default.device = (self._mic, OUTPUT_DEVICE)
+            print(f"[AUDIO] Salida forzada a dispositivo [{OUTPUT_DEVICE}]")
 
         # TTS
         self._tts      = None
@@ -143,8 +164,8 @@ class VozBMO:
         segments, _ = self.stt.transcribe(
             audio_np,
             language=WHISPER_LANG,
-            beam_size=5,
-            best_of=5,
+            beam_size=STT_BEAM_SIZE,
+            best_of=STT_BEST_OF,
             vad_filter=True,
             vad_parameters={"min_silence_duration_ms": 300},
             condition_on_previous_text=False,
@@ -176,9 +197,10 @@ class VozBMO:
                 return
             audio_np = np.concatenate([c.audio_float_array for c in chunks])
             sr       = chunks[0].sample_rate
-            # Agregar 0.3s de silencio al final para que no se corte la última palabra
-            silencio = np.zeros(int(0.3 * sr), dtype="float32")
-            audio_np = np.concatenate([audio_np, silencio])
+            # Silencio pre (0.05s) y post (0.5s) para evitar cortes de palabras
+            silencio_pre  = np.zeros(int(0.05 * sr), dtype="float32")
+            silencio_post = np.zeros(int(0.5  * sr), dtype="float32")
+            audio_np = np.concatenate([silencio_pre, audio_np, silencio_post])
             print(f"[TTS] {len(audio_np)/sr:.1f}s")
             sd.play(audio_np, sr)
             sd.wait()

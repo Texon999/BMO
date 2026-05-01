@@ -9,7 +9,7 @@ Corre 100% offline en PC o Raspberry Pi 5.
 |--------|-----------|
 | Visión | OpenCV LBPH + Haar Cascade |
 | STT    | faster-whisper (tiny/base) |
-| LLM    | Ollama — llama3.2:1b |
+| LLM    | Ollama — qwen2.5:1.5b (configurable) |
 | TTS    | Piper TTS — es_ES-sharvard-medium |
 
 ## Instalación
@@ -24,7 +24,7 @@ pip install -r requirements.txt
 
 ```bash
 # Instalar Ollama: https://ollama.com
-ollama pull llama3.2:1b
+ollama pull qwen2.5:1.5b
 ```
 
 ### 3. Voz española
@@ -39,12 +39,32 @@ python scripts/download_voice.py
 python -m src.main
 ```
 
+### 5. Seleccionar camara/microfono/audio (recomendado)
+
+```bash
+python scripts/configure_devices.py
+```
+
+Configura indices por variables de entorno (o en un `.env` si usas uno):
+
+```bash
+BMO_CAMERA_INDEX=0
+BMO_MIC_DEVICE=-1
+BMO_OUTPUT_DEVICE=-1
+BMO_HEADLESS=false
+BMO_LLM_NUM_PREDICT=180
+BMO_VISION_PROCESS_EVERY_N=1
+BMO_BRAIN_CONTEXT_HOT_RELOAD=true
+```
+
+- `BMO_MIC_DEVICE=-1` usa autodeteccion del primer microfono funcional.
+- `BMO_OUTPUT_DEVICE=-1` usa salida de audio por defecto.
+- `BMO_HEADLESS=true` desactiva ventana OpenCV (util para correr como servicio en Raspberry).
+
 ## Controles
 
 | Tecla | Acción |
 |-------|--------|
-| `V`   | BMO te escucha y responde |
-| `R`   | Registrar nuevo visitante |
 | `Q`   | Salir |
 
 ## Estructura
@@ -62,13 +82,52 @@ BMO/
 │   └── memory.json      # Personas + historial
 ├── voices/              # Modelos de voz Piper (.onnx)
 ├── scripts/
-│   └── download_voice.py
+│   ├── download_voice.py
+│   ├── configure_devices.py
+│   └── smoke_check.py
 └── requirements.txt
 ```
+
+## Personalizar conocimiento del cerebro
+
+Puedes agregar contexto propio en `data/brain_context.txt` (texto libre).  
+BMO lo inyecta en el **system prompt** de cada respuesta al LLM.
+
+- Con **`BMO_BRAIN_CONTEXT_HOT_RELOAD=true`** (por defecto), si guardas cambios en ese archivo, se **vuelve a leer** en la siguiente pregunta (sin reiniciar el programa). Si prefieres cargar solo al arrancar, pon `false`.
+- Las respuestas **predefinidas** (regex en `brain.py`) no pasan por el LLM: no verán `brain_context.txt` hasta que caigan en el modelo.
+
+## Comportamiento del modelo (mejoras aplicadas)
+
+| Qué | Para qué sirve |
+|-----|----------------|
+| Fraccionar oraciones al hablar | Evita cortes raros al pasar texto del LLM al TTS (streaming). |
+| `BMO_LLM_NUM_PREDICT` | Más tokens permitidos por respuesta (menos “cortes” por límite). |
+| Reglas extra en el prompt | Menos invención en temas sensibles (historia, religión, cifras) y tono amable fijo. |
+| `extra_context_para_prompt()` | `brain_context.txt` con recarga por **fecha de modificación** del archivo. |
+| `BMO_VISION_PROCESS_EVERY_N` | En Raspberry, `2` o `3` procesa reconocimiento **1 de cada N** frames y baja CPU (la cámara sigue leyendo a la misma tasa). |
+| Logging `BMO` en `brain.py` | Misma convención de hora/nivel que `main.py` (`[LLM→TTS]`, `[PREDEFINIDA]`, etc.). |
+
+**Descartado de momento** (útil más adelante, no ahora): wake word tipo OpenWakeWord (más dependencias y flujo distinto), debounce agresivo en `memory.json` (riesgo si se apaga el proceso antes de guardar).
+
+## Verificación rápida del entorno
+
+Sin abrir cámara ni cargar el cerebro completo:
+
+```bash
+python scripts/smoke_check.py
+```
+
+Comprueba imports críticos, audio y que **Ollama** responda. Útil en una Raspberry nueva antes de `python -m src.main`.
+
+## Aprender Python y este proyecto
+
+Si vienes de JavaScript, React, C# o Java: [docs/GUIA_APRENDIZAJE_PYTHON_Y_BMO.md](docs/GUIA_APRENDIZAJE_PYTHON_Y_BMO.md) explica Python aplicado a BMO, cómo se conectan los módulos y cómo extender el código.
 
 ## Migración a Raspberry Pi 5
 
 1. Clonar el repo en la Pi
 2. Instalar dependencias igual
-3. Cambiar en `voice.py`: `WHISPER_MODEL = "tiny"` (ya está por defecto)
-4. Ollama corre igual en ARM64
+3. Ajustar por entorno: `BMO_WHISPER_MODEL=tiny` para menor consumo
+4. Probar dispositivos con `python scripts/configure_devices.py`
+5. Si no hay monitor, usar `BMO_HEADLESS=true`
+6. Ollama corre en ARM64 (verifica modelo con `ollama list`)

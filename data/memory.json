@@ -3,5 +3,33 @@
         "nombre": "Sambrano",
         "visitas": 1,
         "ultima_vez": "2026-04-19 00:32:54"
+    },
+    "_anonimo": {
+        "turnos_recientes": [
+            {
+                "user": "se me queda mal creo",
+                "assistant": "No tienes problema, intenta otra vez por favor."
+            },
+            {
+                "user": "que es la vida.",
+                "assistant": "La vida es la existencia que llevamos en el mundo, involucrando experiencias y acciones cotidianas. Es un viaje lleno de sorpresas y emociones, tanto buenas como malas."
+            },
+            {
+                "user": "¿Cuáles son los colores de la bandera de Colombia?",
+                "assistant": "Las colores de la bandera de Colombia son Amarillo y Morado."
+            },
+            {
+                "user": "¡Gracias, mamí!",
+                "assistant": "De nada, mi amor. Tu sonrisa ilumina el día."
+            },
+            {
+                "user": "¿Cuáles son los colores de la bandera de Colombia?",
+                "assistant": "La bandera de Colombia tiene tres colores principales: rojo, azul y dorado."
+            },
+            {
+                "user": "¿Cuáles son los colores de la bandera de Colombia?",
+                "assistant": "La bandera de Colombia tiene tres colores: amarillo (arriba), azul (medio) y rojo (abajo)."
+            }
+        ]
     }
 }

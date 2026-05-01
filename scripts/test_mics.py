@@ -2,7 +2,10 @@
 import sounddevice as sd
 import numpy as np
 
-candidatos = [2, 3, 10, 11, 19, 20, 24, 27]
+candidatos = [
+    idx for idx, d in enumerate(sd.query_devices())
+    if d.get("max_input_channels", 0) > 0
+]
 
 print("Probando micrófonos — habla durante cada prueba...\n")
 for idx in candidatos:

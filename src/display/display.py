@@ -1,18 +1,40 @@
 """
-Display de BMO — ventana fullscreen con caras animadas.
-Estados: warmup | idle | listening | thinking | speaking
+Módulo de display de BMO — Animación de la cara en pantalla.
+
+Muestra una ventana con la cara animada de BMO según el estado actual:
+  - warmup:    Cara de inicio mientras carga
+  - idle:      Cara en reposo, esperando
+  - listening: Cara escuchando (micrófono activo)
+  - thinking:  Cara pensando (LLM procesando)
+  - speaking:  Cara hablando (TTS reproduciendo)
+
+Las imágenes se cargan desde assets/faces/{estado}/*.png al iniciar.
+Si no hay imágenes para un estado, se usa un rectángulo de color como fallback.
+Las imágenes PNG con canal alfa (RGBA) se componen sobre un fondo oscuro.
+
+Modo headless (BMO_HEADLESS=true):
+  No abre ninguna ventana. Útil para ejecutar BMO sin pantalla (servidor, SSH).
+  tick() simplemente duerme 30ms y devuelve True.
+
+Overlay de nombre:
+  Cuando BMO reconoce a alguien por cámara, muestra "Hola, {nombre}!"
+  en la parte inferior de la pantalla durante los estados idle y speaking.
+
+Controles:
+  Q → cierra la ventana y apaga BMO.
 """
 import cv2
 import numpy as np
 import time
 from pathlib import Path
 from enum import Enum, auto
+from src.config.runtime import HEADLESS
 
 
 FACE_DIR   = Path("assets/faces")
 WIN_NAME   = "BMO"
 WIN_W, WIN_H = 480, 480
-FPS_ANIM   = 4   # frames por segundo de animación (pocas imágenes → más lento)
+FPS_ANIM   = 4   # menor = animación más lenta (cambio de frame cada 1/FPS_ANIM s)
 
 
 class Estado(Enum):
@@ -33,8 +55,10 @@ class DisplayBMO:
         self._last_t  = time.time()
         self._nombre  = None   # nombre de la persona detectada
 
-        cv2.namedWindow(WIN_NAME, cv2.WINDOW_NORMAL)
-        cv2.resizeWindow(WIN_NAME, WIN_W, WIN_H)
+        self._headless = HEADLESS
+        if not self._headless:
+            cv2.namedWindow(WIN_NAME, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(WIN_NAME, WIN_W, WIN_H)
 
     # ── Carga de imágenes ─────────────────────────────────────────────────────
 
@@ -69,6 +93,10 @@ class DisplayBMO:
 
     def tick(self) -> bool:
         """Avanza la animación y muestra el frame. Devuelve False si se presiona Q."""
+        if self._headless:
+            time.sleep(0.03)
+            return True
+
         now = time.time()
         if now - self._last_t >= 1.0 / FPS_ANIM:
             frames = self._frames[self.estado.value]
@@ -92,8 +120,6 @@ class DisplayBMO:
             cv2.putText(frame, f"Hola, {self._nombre}!",
                         (15, WIN_H - 20), cv2.FONT_HERSHEY_SIMPLEX,
                         0.7, (100, 255, 100), 2)
-
-        # Overlay de estado (esquina superior)
         label = self.estado.value.upper()
         cv2.putText(frame, label, (10, 25),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
@@ -103,4 +129,5 @@ class DisplayBMO:
         return key != ord("q")
 
     def cerrar(self):
-        cv2.destroyAllWindows()
+        if not self._headless:
+            cv2.destroyAllWindows()

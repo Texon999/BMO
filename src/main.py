@@ -1,24 +1,136 @@
 """
-BMO — Agente local autónomo
+Módulo principal de BMO — Agente conversacional autónomo con IA multimodal.
 
-Flujo:
-  1. Warmup
-  2. BMO escucha SIEMPRE (no requiere cara)
-  3. Si detecta cara conocida → usa su nombre como contexto
-  4. Si alguien dice su nombre → inicia registro de cara
-  5. Responde con LLM en loop continuo
+ARQUITECTURA DEL SISTEMA:
+BMO es un agente de IA completo que integra múltiples modalidades:
+- 🎤 Entrada de voz (Whisper STT)
+- 👁️ Visión computacional (OpenCV + ONNX)
+- 🧠 Procesamiento de lenguaje (Ollama + Qwen 2.5:1.5B)
+- 🔊 Síntesis de voz (Piper TTS)
+- 🖥️ Interfaz visual (animaciones de cara)
+- 💾 Memoria personalizada (reconocimiento facial + contexto)
+
+ARQUITECTURA DE HILOS:
+El sistema opera con tres hilos paralelos para máximo rendimiento:
+
+  🎨 Hilo Principal (display):
+    - Renderiza la animación de la cara de BMO en tiempo real
+    - Controla el ciclo de vida del proceso
+    - Estados visuales: warmup, idle, listening, thinking, speaking
+    - Si se cierra la ventana → BMO se apaga completamente
+
+  📷 Hilo de Cámara (_loop_camara):
+    - Captura frames continuamente de la cámara
+    - Procesa 1 de cada VISION_PROCESS_EVERY_N frames (optimización RPi5)
+    - Detecta rostros con Haar Cascade (rápido, CPU)
+    - Reconoce personas con embeddings ONNX (512 dimensiones)
+    - Implementa lógica "pegajosa": recuerda nombres durante NOMBRE_TIMEOUT segundos
+    - Actualiza _nombre_actual thread-safe con locks
+
+  🎧 Hilo de Lógica (_loop_logica):
+    - Escucha micrófono con VAD (detección de actividad de voz)
+    - Transcribe audio con Whisper cuando detecta habla
+    - Procesa texto: detección de nombres, respuestas predefinidas, LLM
+    - Maneja registro facial automático para nuevas personas
+    - Genera respuestas contextuales basadas en reconocimiento facial
+
+FLUJO COMPLETO DE CONVERSACIÓN:
+1. **Detección de Presencia**: Cámara detecta y reconoce rostros continuamente
+2. **Saludo Automático**: Si reconoce a alguien nuevo, saluda por nombre
+3. **Escucha Activa**: VAD detecta cuando alguien empieza a hablar
+4. **Grabación Inteligente**: Graba hasta detectar silencio o timeout
+5. **Transcripción**: Whisper convierte audio a texto en español
+6. **Análisis de Intención**: 
+   - ¿Es un nombre nuevo? → Inicia registro facial
+   - ¿Hay respuesta predefinida? → Respuesta instantánea
+   - ¿Necesita LLM? → Clasificación + generación contextual
+7. **Respuesta Multimodal**: 
+   - Generación de texto con contexto personalizado
+   - Síntesis de voz en streaming (habla mientras piensa)
+   - Animación facial sincronizada con el estado
+8. **Actualización de Memoria**: Guarda el turno en el contexto de la persona
+
+REGISTRO FACIAL AUTOMÁTICO:
+Cuando alguien dice "me llamo X" o "soy X":
+1. **Validación**: Verifica que el nombre no esté ya registrado
+2. **Instrucciones**: Explica el proceso al usuario
+3. **Captura Múltiple**: Toma 25 fotos del rostro desde diferentes ángulos
+4. **Extracción de Features**: Genera embeddings ONNX de 512 dimensiones
+5. **Promediado**: Combina embeddings para mayor robustez
+6. **Persistencia**: Guarda en memory.json con ID único
+7. **Confirmación**: Notifica éxito y saluda por nombre
+
+LÓGICA DE RECONOCIMIENTO "PEGAJOSA":
+- Cuando se reconoce una cara → _nombre_actual = nombre
+- Si la cara desaparece → mantiene el nombre durante NOMBRE_TIMEOUT segundos
+- Esto evita pérdida de contexto por movimientos temporales
+- Permite conversaciones naturales sin re-reconocimiento constante
+
+OPTIMIZACIONES PARA RASPBERRY PI 5:
+- **Visión**: Procesa 1 de cada 2 frames (VISION_PROCESS_EVERY_N=2)
+- **Audio**: VAD evita procesamiento continuo de silencio
+- **LLM**: Clasificador reduce tokens según tipo de pregunta
+- **TTS**: Streaming permite hablar mientras genera
+- **Memoria**: Caché en RAM evita I/O repetitivo de JSON
+- **Hilos**: Paralelización maximiza uso de 4 núcleos
+
+CONFIGURACIÓN DINÁMICA:
+Todos los parámetros se leen desde src/config/runtime.py:
+- Índices de cámara y micrófono
+- Modelos de Whisper y configuración STT
+- Parámetros del LLM (temperatura, tokens, etc.)
+- Umbrales de VAD y timeouts
+- Modo headless para ejecución sin pantalla
+
+MANEJO DE ERRORES Y ROBUSTEZ:
+- Autodetección de micrófono si no se especifica
+- Modo degradado si falta el modelo facial ONNX
+- Fallbacks para dispositivos de audio no disponibles
+- Recuperación automática de errores de transcripción
+- Validación de recursos en _preflight()
+
+ESTADOS VISUALES Y FEEDBACK:
+- **WARMUP**: Cargando componentes (3 segundos)
+- **IDLE**: Esperando interacción, muestra nombre si reconoce a alguien
+- **LISTENING**: Micrófono activo, grabando audio
+- **THINKING**: LLM procesando, generando respuesta
+- **SPEAKING**: TTS reproduciendo, cara animada hablando
+
+INTEGRACIÓN CON MEMORIA PERSONALIZADA:
+- Cada persona reconocida tiene su propio contexto de conversación
+- El resumen se inyecta en el system prompt del LLM
+- Continuidad entre sesiones sin contaminar contextos
+- Cooldown de saludos evita repetición excesiva (60 segundos)
+
+EJEMPLO DE SESIÓN TÍPICA:
+1. Usuario se acerca → cámara detecta cara desconocida
+2. Usuario: "Hola, me llamo Ana" → BMO inicia registro facial
+3. BMO: "Hola Ana! Voy a recordar tu cara..." → captura 25 fotos
+4. BMO: "Listo Ana! Ya te tengo en mi memoria" → registro completo
+5. Usuario: "¿Qué tiempo hace?" → BMO clasifica como FACTUAL
+6. BMO: "No tengo datos del clima actual, búscalo en internet" → respuesta en 2 oraciones
+7. Próxima sesión: BMO reconoce a Ana y saluda automáticamente con contexto previo
 """
 import threading
 import time
 import logging
-import random
 import cv2
+import sounddevice as sd
+import ollama
 
 from src.display.display import DisplayBMO, Estado
 from src.vision.vision   import VisionBMO
 from src.voice.voice     import VozBMO
 from src.brain.brain     import responder_con_tts, detectar_nombre, saludo_fijo
 from src.memory.register import nombres_a_ids
+from src.config.runtime import (
+    CAMERA_INDEX,
+    MIC_DEVICE,
+    OUTPUT_DEVICE,
+    HEADLESS,
+    VISION_PROCESS_EVERY_N,
+    BRAIN_CONTEXT_HOT_RELOAD,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,12 +143,36 @@ CAPTURE_FRAMES = 25     # fotos para registrar un rostro
 SALUDO_COOLDOWN = 60.0  # segundos entre saludos a la misma persona
 
 
+def _preflight():
+    """Valida recursos base antes de iniciar el loop."""
+    log.info(
+        "Config runtime | camera=%s mic=%s out=%s headless=%s vision_every_n=%s brain_hot_reload=%s",
+        CAMERA_INDEX,
+        MIC_DEVICE,
+        OUTPUT_DEVICE,
+        HEADLESS,
+        VISION_PROCESS_EVERY_N,
+        BRAIN_CONTEXT_HOT_RELOAD,
+    )
+    try:
+        devices = sd.query_devices()
+        log.info("Audio detectado: %s dispositivos", len(devices))
+    except Exception as e:
+        log.warning("No se pudo consultar audio: %s", e)
+
+    try:
+        ollama.list()
+        log.info("Ollama conectado")
+    except Exception as e:
+        log.warning("Ollama no responde: %s", e)
+
+
 class AgenteBMO:
     def __init__(self):
         log.info("=== Iniciando BMO ===")
         self.display = DisplayBMO()
-        self.vision  = VisionBMO(camera_index=0)
-        self.voz     = VozBMO()
+        self.vision  = VisionBMO(camera_index=CAMERA_INDEX)
+        self.voz     = VozBMO(mic_device=MIC_DEVICE)
 
         self._running         = True
         self._nombre_actual: str | None = None   # nombre detectado por cámara (pegajoso)
@@ -45,6 +181,10 @@ class AgenteBMO:
         self._lock_camara     = threading.Lock()
         self._ultimo_visto:   float = 0.0         # timestamp última vez que se vio cara
         self._NOMBRE_TIMEOUT  = 30.0              # segundos antes de olvidar el nombre
+        self._vision_estado_log = "sin_caras"
+        self._vision_ultimo_nombre: str | None = None
+        self._vision_frame_idx = 0
+        self._last_detecciones: list = []
 
         log.info("=== BMO listo ===")
 
@@ -69,13 +209,20 @@ class AgenteBMO:
                 time.sleep(0.1)
                 continue
 
-            _, detecciones = self.vision.procesar_rostro(frame)
-            reconocidos = [d["nombre"] for d in detecciones if d["id"] is not None]
+            if self._vision_frame_idx % VISION_PROCESS_EVERY_N == 0:
+                _, self._last_detecciones = self.vision.procesar_rostro(frame)
+            self._vision_frame_idx += 1
+            detecciones = self._last_detecciones
+            reconocidos = [d for d in detecciones if d["id"] is not None]
+            desconocidos = [d for d in detecciones if d["id"] is None]
+
+            self._log_eventos_vision(reconocidos, desconocidos)
 
             with self._lock_camara:
                 if reconocidos:
-                    self._nombre_camara = reconocidos[0]
-                    self._nombre_actual = reconocidos[0]   # actualizar nombre pegajoso
+                    nombre = str(reconocidos[0]["nombre"])
+                    self._nombre_camara = nombre
+                    self._nombre_actual = nombre   # actualizar nombre pegajoso
                     self._ultimo_visto  = time.time()
                 else:
                     self._nombre_camara = None
@@ -84,6 +231,31 @@ class AgenteBMO:
                         self._nombre_actual = None
 
             time.sleep(0.1)
+
+    def _log_eventos_vision(self, reconocidos: list[dict], desconocidos: list[dict]):
+        """
+        Loguea transiciones relevantes de visión sin saturar la consola.
+        """
+        if not reconocidos and not desconocidos:
+            if self._vision_estado_log != "sin_caras":
+                log.info("[VISION] Sin caras en cámara")
+                self._vision_estado_log = "sin_caras"
+                self._vision_ultimo_nombre = None
+            return
+
+        if reconocidos:
+            nombre = str(reconocidos[0]["nombre"])
+            similitud = float(reconocidos[0]["similitud"])
+            if self._vision_estado_log != "reconocido" or self._vision_ultimo_nombre != nombre:
+                log.info("[VISION] Cara reconocida: %s (sim %.1f)", nombre, similitud)
+                self._vision_estado_log = "reconocido"
+                self._vision_ultimo_nombre = nombre
+            return
+
+        if self._vision_estado_log != "desconocido":
+            log.info("[VISION] Cara detectada pero no reconocida (%s rostro/s)", len(desconocidos))
+            self._vision_estado_log = "desconocido"
+            self._vision_ultimo_nombre = None
 
     # ── Hilo de lógica ────────────────────────────────────────────────────────
 
@@ -189,8 +361,8 @@ class AgenteBMO:
             gray  = cv2.equalizeHist(gray)
             faces = self.vision.face_cascade.detectMultiScale(gray, 1.1, 8, minSize=(60, 60))
             for (x, y, w, h) in faces:
-                roi = cv2.resize(gray[y:y+h, x:x+w], (200, 200))
-                capturas.append(roi)
+                roi_bgr = f[y:y+h, x:x+w]  # BGR del frame original, no del gray
+                capturas.append(roi_bgr)
                 if len(capturas) % 5 == 0:
                     log.info(f"  {len(capturas)}/{CAPTURE_FRAMES} fotos")
             time.sleep(0.04)
@@ -217,6 +389,7 @@ class AgenteBMO:
 
 
 def main():
+    _preflight()
     agente = AgenteBMO()
     try:
         agente.run()
