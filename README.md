@@ -14,32 +14,65 @@ Corre 100% offline en PC o Raspberry Pi 5.
 
 ## Instalación
 
-### 1. Dependencias Python
+### A. Qué debe estar en el repo
+
+Para que un clon funcione en otro equipo debes incluir:
+- `src/` con todo el código Python.
+- `requirements.txt` con las dependencias.
+- `config.json` con la ruta por defecto de la voz.
+- `scripts/` con los scripts de descarga y configuración.
+- `data/` con archivos de configuración mínima, pero no es necesario subir modelos grandes.
+
+No es necesario subir los modelos descargables grandes al repo (`voices/*.onnx`, `models/`, `data/history/`). Estos se descargan después de la instalación.
+
+### B. Pasos para clonar y ejecutar en otro equipo
+
+1. Clona el repo y entra en la carpeta:
+
+```bash
+git clone <repo-url>
+cd BMO
+```
+
+2. Crea y activa un entorno virtual:
+
+```bash
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+3. Instala dependencias Python:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Ollama + modelo
+4. Instala Ollama y descarga el modelo LLM:
 
 ```bash
 # Instalar Ollama: https://ollama.com
 ollama pull qwen2.5:1.5b
 ```
 
-### 3. Voz española
+5. Descarga la voz de Piper en español:
 
 ```bash
 python scripts/download_voice.py
 ```
 
-### 4. Ejecutar
+6. Ejecuta el proyecto:
 
 ```bash
 python -m src.main
 ```
 
-### 5. Seleccionar camara/microfono/audio (recomendado)
+### C. ¿Qué pasa si no descargas el modelo de voz?
+
+- El proyecto sigue arrancando.
+- `src/voice/voice.py` busca `voices/es_ES-sharvard-medium.onnx` y su `*.json`.
+- Si no están, BMO no hablará por altavoz, pero seguirá funcionando e imprimirá el texto en consola.
+
+### Seleccionar camara/microfono/audio (recomendado)
 
 ```bash
 python scripts/configure_devices.py

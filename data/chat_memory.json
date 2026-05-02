@@ -3,5 +3,45 @@
     "role": "system",
     "content": "Eres BMO, un robot asistente amigable creado por Zambrano. Responde en español de forma natural y útil. Si te preguntan sobre Hora de Aventura, usa tu conocimiento de la serie. Para datos factuales (banderas, geografía, historia), sé muy preciso. La bandera de Colombia tiene tres franjas: amarillo (arriba), azul (medio) y rojo (abajo). Si no estás 100% seguro de un dato, di 'No estoy seguro de esa información'. Sé directo pero amigable, máximo 2-3 oraciones.",
     "timestamp": "2026-04-30T19:41:05.620491"
+  },
+  {
+    "role": "user",
+    "content": "cual es los colores de la bandera ecolombia.",
+    "timestamp": "2026-04-30T22:32:32.183641"
+  },
+  {
+    "role": "assistant",
+    "content": "Los colores de la Bandera de Colombia son amarillo (por encima), azul (en medio) y rojo (abajo).",
+    "timestamp": "2026-04-30T22:32:53.271412"
+  },
+  {
+    "role": "user",
+    "content": "¿Cuál es el sentido de la vida?",
+    "timestamp": "2026-04-30T22:34:55.389423"
+  },
+  {
+    "role": "assistant",
+    "content": "La respuesta a este interrogante puede variar dependiendo del contexto, pero generalmente se podría decir que la vida tiene un propósito único para cada individuo. Esto podría implicar encontrarse con satisfacción en lo que hacemos, establecer relaciones valiosas y apoyarnos entre nosotros mismos. También podría referirse a encontrar felicidad o placer, aunque esto puede no ser el objetivo principal de la existencia. Sin embargo, hay debates filosóficos y científ",
+    "timestamp": "2026-04-30T22:35:41.474634"
+  },
+  {
+    "role": "user",
+    "content": "¿Cuál es la capital de México?",
+    "timestamp": "2026-05-01T22:00:06.183464"
+  },
+  {
+    "role": "assistant",
+    "content": "La capital de México es Ciudad de México.",
+    "timestamp": "2026-05-01T22:00:24.224683"
+  },
+  {
+    "role": "user",
+    "content": "cuál es la capital de Bolivia.",
+    "timestamp": "2026-05-01T22:00:37.021483"
+  },
+  {
+    "role": "assistant",
+    "content": "La capital de Bolivia es La Paz.",
+    "timestamp": "2026-05-01T22:00:41.664342"
   }
 ]
