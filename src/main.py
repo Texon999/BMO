@@ -180,28 +180,37 @@ class AgenteBMO:
             log.warning("  Cámara no disponible: %s", e)
             log.warning("  BMO funcionará sin reconocimiento facial (solo audio)")
         
-        self.voz     = VozBMO(mic_device=MIC_DEVICE)
+        self.voz = VozBMO(mic_device=MIC_DEVICE)
 
-        self._running         = True
-        self._nombre_actual: str | None = None   # nombre detectado por cámara (pegajoso)
-        self._nombre_camara:  str | None = None   # nombre raw del hilo de cámara
-        self._ultimo_saludo: dict[str, float] = {}
-        self._lock_camara     = threading.Lock()
-        self._ultimo_visto:   float = 0.0         # timestamp última vez que se vio cara
-        self._NOMBRE_TIMEOUT  = 30.0              # segundos antes de olvidar el nombre
-        self._vision_estado_log = "sin_caras"
-        self._vision_ultimo_nombre: str | None = None
+        self._running = True
+
+        # ── Estado de visión (thread-safe) ────────────────────────────────────
+        # Nombre reconocido por la cámara (cara registrada en memory.json)
+        self._nombre_camara_reconocido: str | None = None
+        # True si hay una cara en cámara pero NO está registrada
+        self._cara_desconocida_presente: bool = False
+        self._ultimo_visto: float = 0.0
+        self._NOMBRE_TIMEOUT = 30.0   # segundos antes de olvidar el nombre pegajoso
+        self._lock_camara = threading.Lock()
         self._vision_frame_idx = 0
         self._last_detecciones: list = []
+        self._vision_estado_log = "sin_caras"
+        self._vision_ultimo_nombre: str | None = None
+
+        # ── Nombre en uso para el LLM (puede venir de cámara o de caché) ─────
+        # Si la cámara reconoce → _nombre_activo = nombre reconocido (persistente)
+        # Si no hay cámara y el usuario dijo su nombre → _nombre_activo = caché temporal
+        # En cualquier otro caso → None
+        self._nombre_activo: str | None = None
+        self._nombre_cache_temporal: str | None = None  # solo RAM, sin foto
+
+        self._ultimo_saludo: dict[str, float] = {}
 
         log.info("=== BMO listo ===")
 
     def run(self):
-        # Hilo de cámara — actualiza _nombre_actual en segundo plano
         threading.Thread(target=self._loop_camara, daemon=True).start()
-        # Hilo de lógica — escucha y responde
         threading.Thread(target=self._loop_logica, daemon=True).start()
-        # Hilo principal — solo animación
         while self._running:
             if not self.display.tick():
                 self._running = False
@@ -210,11 +219,11 @@ class AgenteBMO:
     # ── Hilo de cámara ────────────────────────────────────────────────────────
 
     def _loop_camara(self):
-        """Lee la cámara y actualiza el nombre detectado con lógica pegajosa."""
+        """Lee la cámara, actualiza el nombre reconocido y el flag de cara desconocida."""
         if self.vision is None:
             log.info("Hilo de cámara desactivado (sin cámara disponible)")
             return
-            
+
         while self._running:
             ret, frame = self.vision.cap.read()
             if not ret:
@@ -224,8 +233,9 @@ class AgenteBMO:
             if self._vision_frame_idx % VISION_PROCESS_EVERY_N == 0:
                 _, self._last_detecciones = self.vision.procesar_rostro(frame)
             self._vision_frame_idx += 1
+
             detecciones = self._last_detecciones
-            reconocidos = [d for d in detecciones if d["id"] is not None]
+            reconocidos  = [d for d in detecciones if d["id"] is not None]
             desconocidos = [d for d in detecciones if d["id"] is None]
 
             self._log_eventos_vision(reconocidos, desconocidos)
@@ -233,28 +243,34 @@ class AgenteBMO:
             with self._lock_camara:
                 if reconocidos:
                     nombre = str(reconocidos[0]["nombre"])
-                    self._nombre_camara = nombre
-                    self._nombre_actual = nombre   # actualizar nombre pegajoso
-                    self._ultimo_visto  = time.time()
-                else:
-                    self._nombre_camara = None
-                    # Olvidar nombre solo si pasó el timeout
+                    self._nombre_camara_reconocido = nombre
+                    self._cara_desconocida_presente = False
+                    self._ultimo_visto = time.time()
+                    # Si la cámara reconoce a alguien, ese es el nombre activo
+                    # y descartamos cualquier caché temporal
+                    self._nombre_activo = nombre
+                    self._nombre_cache_temporal = None
+                elif desconocidos:
+                    self._cara_desconocida_presente = True
+                    # Lógica pegajosa: mantener nombre reconocido durante el timeout
                     if time.time() - self._ultimo_visto > self._NOMBRE_TIMEOUT:
-                        self._nombre_actual = None
+                        self._nombre_camara_reconocido = None
+                        self._nombre_activo = self._nombre_cache_temporal  # volver al caché si existe
+                else:
+                    self._cara_desconocida_presente = False
+                    if time.time() - self._ultimo_visto > self._NOMBRE_TIMEOUT:
+                        self._nombre_camara_reconocido = None
+                        self._nombre_activo = self._nombre_cache_temporal
 
             time.sleep(0.1)
 
     def _log_eventos_vision(self, reconocidos: list[dict], desconocidos: list[dict]):
-        """
-        Loguea transiciones relevantes de visión sin saturar la consola.
-        """
         if not reconocidos and not desconocidos:
             if self._vision_estado_log != "sin_caras":
                 log.info("[VISION] Sin caras en cámara")
                 self._vision_estado_log = "sin_caras"
                 self._vision_ultimo_nombre = None
             return
-
         if reconocidos:
             nombre = str(reconocidos[0]["nombre"])
             similitud = float(reconocidos[0]["similitud"])
@@ -263,7 +279,6 @@ class AgenteBMO:
                 self._vision_estado_log = "reconocido"
                 self._vision_ultimo_nombre = nombre
             return
-
         if self._vision_estado_log != "desconocido":
             log.info("[VISION] Cara detectada pero no reconocida (%s rostro/s)", len(desconocidos))
             self._vision_estado_log = "desconocido"
@@ -273,16 +288,11 @@ class AgenteBMO:
 
     def _loop_logica(self):
         self.display.set_estado(Estado.WARMUP)
-        
-        # Precargar el modelo LLM de forma bloqueante durante el warmup
-        # Así la primera respuesta real es igual de rápida que las siguientes
         log.info("Precargando modelo LLM durante warmup...")
         precargar_modelo()
-        
-        time.sleep(1.0)  # Pequeña pausa visual después de cargar
+        time.sleep(1.0)
         log.info("BMO despierto")
 
-        # Saludo inicial
         self.display.set_estado(Estado.SPEAKING)
         self.voz.hablar("Hola! Soy BMO. Estoy listo para hablar contigo!")
         self.display.set_estado(Estado.IDLE)
@@ -291,22 +301,23 @@ class AgenteBMO:
             try:
                 self._ciclo_escucha()
             except Exception as e:
-                log.error(f"Error: {e}")
+                log.error(f"Error en ciclo: {e}")
                 time.sleep(1.0)
 
     def _ciclo_escucha(self):
-        """Un ciclo: escuchar → procesar → responder."""
-        # Saludo si hay cara conocida nueva
-        with self._lock_camara:
-            nombre_camara = self._nombre_actual
+        """Un ciclo completo: saludo automático → escuchar → procesar → responder."""
 
-        if nombre_camara:
+        # Saludo automático si la cámara reconoce a alguien nuevo
+        with self._lock_camara:
+            nombre_reconocido = self._nombre_camara_reconocido
+
+        if nombre_reconocido:
             ahora = time.time()
-            if ahora - self._ultimo_saludo.get(nombre_camara, 0) > SALUDO_COOLDOWN:
-                self._ultimo_saludo[nombre_camara] = ahora
-                saludo = saludo_fijo(nombre_camara)
-                log.info(f"Saludando a {nombre_camara}: '{saludo}'")
-                self.display.set_estado(Estado.SPEAKING, nombre=nombre_camara)
+            if ahora - self._ultimo_saludo.get(nombre_reconocido, 0) > SALUDO_COOLDOWN:
+                self._ultimo_saludo[nombre_reconocido] = ahora
+                saludo = saludo_fijo(nombre_reconocido)
+                log.info(f"Saludando a {nombre_reconocido}: '{saludo}'")
+                self.display.set_estado(Estado.SPEAKING, nombre=nombre_reconocido)
                 self.voz.hablar(saludo)
                 self.display.set_estado(Estado.IDLE)
 
@@ -321,26 +332,59 @@ class AgenteBMO:
 
         log.info(f"Escuché: '{texto}'")
 
-        # Obtener nombre actual de cámara para contexto (pegajoso)
+        # Leer estado de cámara en este momento
         with self._lock_camara:
-            nombre_contexto = self._nombre_actual
+            nombre_reconocido   = self._nombre_camara_reconocido
+            cara_desconocida    = self._cara_desconocida_presente
+            camara_disponible   = self.vision is not None
+
+        # ── Lógica de nombre ──────────────────────────────────────────────────
+        nombre_nuevo = detectar_nombre(texto)
+
+        if nombre_nuevo:
+            conocidos = list(nombres_a_ids().values())
+            ya_registrado = nombre_nuevo.lower() in [n.lower() for n in conocidos]
+
+            if camara_disponible and cara_desconocida and not ya_registrado:
+                # CASO 1: Cámara activa + cara desconocida + nombre nuevo
+                # → Registrar foto y hacer el nombre persistente
+                log.info(f"[NOMBRE] Cara desconocida dijo '{nombre_nuevo}' → registrando foto")
+                self._registrar_persona(nombre_nuevo)
+                return
+
+            elif camara_disponible and nombre_reconocido:
+                # CASO 2: Cámara activa + cara ya reconocida
+                # → Ignorar lo que diga, ya sabemos quién es
+                log.info(f"[NOMBRE] Cámara ya reconoció a '{nombre_reconocido}', ignorando '{nombre_nuevo}'")
+
+            elif not camara_disponible and not ya_registrado:
+                # CASO 3: Sin cámara + nombre nuevo
+                # → Guardar en caché temporal (solo RAM, sin foto)
+                self._nombre_cache_temporal = nombre_nuevo
+                self._nombre_activo = nombre_nuevo
+                log.info(f"[NOMBRE] Sin cámara → nombre en caché temporal: '{nombre_nuevo}'")
+                self.display.set_estado(Estado.SPEAKING)
+                self.voz.hablar(f"Hola {nombre_nuevo}! Te recuerdo mientras hablamos, pero sin cámara no puedo guardar tu cara.")
+                self.display.set_estado(Estado.IDLE)
+                return
+
+            elif ya_registrado:
+                # CASO 4: Nombre ya registrado → usar ese nombre
+                log.info(f"[NOMBRE] '{nombre_nuevo}' ya está registrado, usando como contexto")
+                if not camara_disponible:
+                    self._nombre_cache_temporal = nombre_nuevo
+                    self._nombre_activo = nombre_nuevo
+
+        # Nombre activo para el LLM (puede ser de cámara o caché temporal)
+        with self._lock_camara:
+            nombre_contexto = self._nombre_activo
+
         if nombre_contexto:
             log.info(f"Pensando... (contexto: {nombre_contexto})")
         else:
             log.info("Pensando... (contexto: ninguno)")
 
-        # Detectar si dice su nombre → registrar
-        nombre_nuevo = detectar_nombre(texto)
-        if nombre_nuevo:
-            # No registrar si ya lo conocemos con ese nombre
-            conocidos = list(nombres_a_ids().values())
-            if nombre_nuevo.lower() not in [n.lower() for n in conocidos]:
-                self._registrar_persona(nombre_nuevo)
-                return
-            else:
-                log.info(f"'{nombre_nuevo}' ya está registrado")
-
-        # Responder — LLM y TTS en paralelo (igual que be-more-agent)
+        # Responder
         self.display.set_estado(Estado.THINKING)
 
         def _on_speaking():
@@ -357,17 +401,14 @@ class AgenteBMO:
     # ── Registro de persona ───────────────────────────────────────────────────
 
     def _registrar_persona(self, nombre: str):
-        if self.vision is None:
-            log.warning("No se puede registrar '%s': cámara no disponible", nombre)
-            self.display.set_estado(Estado.SPEAKING)
-            self.voz.hablar(f"Hola {nombre}, pero no tengo cámara para recordar tu cara. Continúa sin registro.")
-            self.display.set_estado(Estado.IDLE)
-            return
-            
+        """
+        Registra la cara de la persona frente a la cámara.
+        Solo se llama cuando hay cámara activa y cara desconocida.
+        Al terminar, el nombre queda persistente en memory.json.
+        """
         log.info(f"Iniciando registro: '{nombre}'")
         siguiente_id = self.vision.siguiente_id()
 
-        # Instrucciones claras
         self.display.set_estado(Estado.SPEAKING)
         self.voz.hablar(f"Hola {nombre}! Voy a recordar tu cara. Quedate quieto y mirame!")
         time.sleep(0.5)
@@ -375,7 +416,7 @@ class AgenteBMO:
         self.display.set_estado(Estado.LISTENING)
 
         capturas = []
-        timeout  = time.time() + 15
+        timeout = time.time() + 15
         log.info(f"Capturando {CAPTURE_FRAMES} fotos...")
 
         while len(capturas) < CAPTURE_FRAMES and time.time() < timeout:
@@ -386,7 +427,7 @@ class AgenteBMO:
             gray  = cv2.equalizeHist(gray)
             faces = self.vision.face_cascade.detectMultiScale(gray, 1.1, 8, minSize=(60, 60))
             for (x, y, w, h) in faces:
-                roi_bgr = f[y:y+h, x:x+w]  # BGR del frame original, no del gray
+                roi_bgr = f[y:y+h, x:x+w]
                 capturas.append(roi_bgr)
                 if len(capturas) % 5 == 0:
                     log.info(f"  {len(capturas)}/{CAPTURE_FRAMES} fotos")
@@ -395,9 +436,13 @@ class AgenteBMO:
         if len(capturas) >= 10:
             self.vision.aprender_rostro(siguiente_id, nombre, capturas)
             log.info(f"Registro exitoso: {nombre} (ID {siguiente_id}, {len(capturas)} fotos)")
+            # El nombre ahora es persistente — actualizar estado y limpiar caché temporal
+            with self._lock_camara:
+                self._nombre_activo = nombre
+                self._nombre_cache_temporal = None
             self._ultimo_saludo[nombre] = time.time()
             self.display.set_estado(Estado.SPEAKING, nombre=nombre)
-            self.voz.hablar(f"Listo {nombre}! Ya te tengo en mi memoria. Hora de aventura!")
+            self.voz.hablar(f"Listo {nombre}! Ya te tengo en mi memoria.")
         else:
             log.warning(f"Pocas fotos capturadas: {len(capturas)}")
             self.display.set_estado(Estado.SPEAKING)

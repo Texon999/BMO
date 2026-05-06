@@ -139,30 +139,32 @@ registrar(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# BLOQUE 2: System prompt — Zambrano es un equipo
+# BLOQUE 2: System prompt — Zambrano es un programador del SENA
 # ══════════════════════════════════════════════════════════════════════════════
-titulo("BLOQUE 2 — Zambrano es un equipo, no una persona")
+titulo("BLOQUE 2 — Zambrano es un programador del SENA, no un equipo")
 
-subtitulo("Test 2.1: Verificar system prompt contiene 'equipo'")
+subtitulo("Test 2.1: Verificar system prompt menciona SENA")
 sp = get_system_prompt()
-tiene_equipo = "equipo" in sp.lower()
-registrar("System prompt menciona 'equipo Zambrano'", tiene_equipo,
-          sp[:120] + "..." if not tiene_equipo else "OK")
+tiene_zambrano = "zambrano" in sp.lower()
+tiene_sena = "sena" in sp.lower()
+registrar("System prompt menciona 'Zambrano'", tiene_zambrano,
+          sp[:120] + "..." if not tiene_zambrano else "OK")
+registrar("System prompt menciona 'SENA'", tiene_sena,
+          sp[:120] + "..." if not tiene_sena else "OK")
 
 subtitulo("Test 2.2: Preguntar quién creó a BMO")
 resp, _ = preguntar_llm("¿Quién te creó?")
 print(f"  {INFO}  Respuesta: {resp}")
-# Debe mencionar equipo o Zambrano, NO debe decir "una persona llamada Zambrano"
-ok = "zambrano" in resp.lower() or "equipo" in resp.lower()
-no_persona = "persona llamada" not in resp.lower() and "señor zambrano" not in resp.lower()
-registrar("Menciona Zambrano o equipo", ok, resp[:100])
-registrar("No lo describe como persona individual", no_persona, resp[:100])
+ok = "zambrano" in resp.lower()
+no_equipo = "equipo zambrano" not in resp.lower()
+registrar("Menciona Zambrano como creador", ok, resp[:100])
+registrar("No lo describe como 'equipo Zambrano'", no_equipo, resp[:100])
 
 subtitulo("Test 2.3: Preguntar directamente sobre Zambrano")
 resp, _ = preguntar_llm("¿Qué es Zambrano?")
 print(f"  {INFO}  Respuesta: {resp}")
-ok_equipo = "equipo" in resp.lower() or "desarrollo" in resp.lower() or "creador" in resp.lower()
-registrar("Describe Zambrano como equipo/creadores", ok_equipo, resp[:100])
+ok_persona = any(p in resp.lower() for p in ["programador", "sena", "creador", "zambrano", "persona"])
+registrar("Describe Zambrano como persona/programador", ok_persona, resp[:100])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -476,8 +478,143 @@ registrar(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# RESUMEN FINAL
+# BLOQUE 10: Lógica de nombres — cámara vs sin cámara
 # ══════════════════════════════════════════════════════════════════════════════
+titulo("BLOQUE 10 — Lógica de nombres (cámara vs sin cámara)")
+
+subtitulo("Test 10.1: Sin cámara + nombre nuevo → caché temporal (no persistente)")
+# Simular el estado del agente sin cámara
+class AgenteMock:
+    """Simula el estado interno de AgenteBMO para probar la lógica de nombres."""
+    def __init__(self, tiene_camara: bool = False):
+        self.vision = object() if tiene_camara else None  # truthy si hay cámara
+        self._nombre_activo: str | None = None
+        self._nombre_cache_temporal: str | None = None
+        self._nombre_camara_reconocido: str | None = None
+        self._cara_desconocida_presente: bool = False
+
+    def simular_nombre_dicho(self, texto: str, conocidos: list[str]) -> str:
+        """Simula la lógica de _ciclo_escucha para el manejo de nombres."""
+        from src.brain.brain import detectar_nombre as _detectar
+        nombre_nuevo = _detectar(texto)
+        if not nombre_nuevo:
+            return "sin_nombre"
+
+        ya_registrado = nombre_nuevo.lower() in [n.lower() for n in conocidos]
+        camara_disponible = self.vision is not None
+
+        if camara_disponible and self._cara_desconocida_presente and not ya_registrado:
+            return "registrar_foto"
+        elif camara_disponible and self._nombre_camara_reconocido:
+            return "ignorar_nombre_camara_ya_reconocio"
+        elif not camara_disponible and not ya_registrado:
+            self._nombre_cache_temporal = nombre_nuevo
+            self._nombre_activo = nombre_nuevo
+            return "cache_temporal"
+        elif ya_registrado:
+            if not camara_disponible:
+                self._nombre_cache_temporal = nombre_nuevo
+                self._nombre_activo = nombre_nuevo
+            return "ya_registrado"
+        return "sin_accion"
+
+# Test: sin cámara, nombre nuevo
+agente_sin_cam = AgenteMock(tiene_camara=False)
+resultado_accion = agente_sin_cam.simular_nombre_dicho("me llamo Laura", conocidos=[])
+registrar(
+    "Sin cámara + nombre nuevo → acción 'cache_temporal'",
+    resultado_accion == "cache_temporal",
+    f"acción: {resultado_accion}"
+)
+registrar(
+    "Sin cámara + nombre nuevo → _nombre_activo se establece",
+    agente_sin_cam._nombre_activo == "Laura",
+    f"_nombre_activo: {agente_sin_cam._nombre_activo}"
+)
+registrar(
+    "Sin cámara + nombre nuevo → _nombre_cache_temporal se establece",
+    agente_sin_cam._nombre_cache_temporal == "Laura",
+    f"_nombre_cache_temporal: {agente_sin_cam._nombre_cache_temporal}"
+)
+
+subtitulo("Test 10.2: Sin cámara + nombre ya registrado → usa nombre como contexto")
+agente_sin_cam2 = AgenteMock(tiene_camara=False)
+resultado_accion2 = agente_sin_cam2.simular_nombre_dicho("soy Pedro", conocidos=["Pedro"])
+registrar(
+    "Sin cámara + nombre registrado → acción 'ya_registrado'",
+    resultado_accion2 == "ya_registrado",
+    f"acción: {resultado_accion2}"
+)
+registrar(
+    "Sin cámara + nombre registrado → _nombre_activo se establece",
+    agente_sin_cam2._nombre_activo == "Pedro",
+    f"_nombre_activo: {agente_sin_cam2._nombre_activo}"
+)
+
+subtitulo("Test 10.3: Con cámara + cara desconocida + nombre nuevo → registrar foto")
+agente_con_cam = AgenteMock(tiene_camara=True)
+agente_con_cam._cara_desconocida_presente = True
+resultado_accion3 = agente_con_cam.simular_nombre_dicho("me llamo Sofia", conocidos=[])
+registrar(
+    "Con cámara + cara desconocida + nombre nuevo → acción 'registrar_foto'",
+    resultado_accion3 == "registrar_foto",
+    f"acción: {resultado_accion3}"
+)
+
+subtitulo("Test 10.4: Con cámara + cara ya reconocida → ignorar nombre dicho")
+agente_con_cam2 = AgenteMock(tiene_camara=True)
+agente_con_cam2._nombre_camara_reconocido = "Carlos"
+agente_con_cam2._cara_desconocida_presente = False
+resultado_accion4 = agente_con_cam2.simular_nombre_dicho("soy Pedro", conocidos=[])
+registrar(
+    "Con cámara + cara reconocida → ignorar nombre dicho",
+    resultado_accion4 == "ignorar_nombre_camara_ya_reconocio",
+    f"acción: {resultado_accion4}"
+)
+
+subtitulo("Test 10.5: Caché temporal no persiste en memoria permanente")
+mem_cache = PersistentMemory(memory_file="data/test_cache.json", max_conversations=5)
+# Simular conversación con nombre en caché (sin persona registrada en foto)
+mem_cache.add_user_message("hola soy Laura", persona=None)  # anónimo porque no hay foto
+mem_cache.add_assistant_message("hola Laura!", persona=None)
+msgs_antes = len(mem_cache.permanent_memory)
+mem_cache.commit_session_to_permanent(persona=None)  # sin persona → no persiste
+msgs_despues = len(mem_cache.permanent_memory)
+registrar(
+    "Nombre en caché temporal no persiste en permanente",
+    msgs_despues == msgs_antes,
+    f"antes={msgs_antes}, después={msgs_despues}"
+)
+
+subtitulo("Test 10.6: Nombre con foto SÍ persiste en memoria permanente")
+mem_foto = PersistentMemory(memory_file="data/test_foto.json", max_conversations=5)
+mem_foto.add_user_message("hola soy Sofia", persona="Sofia")  # con persona = foto registrada
+mem_foto.add_assistant_message("hola Sofia!", persona="Sofia")
+msgs_antes2 = len(mem_foto.permanent_memory)
+mem_foto.commit_session_to_permanent(persona="Sofia")
+msgs_despues2 = len(mem_foto.permanent_memory)
+registrar(
+    "Nombre con foto registrada SÍ persiste en permanente",
+    msgs_despues2 > msgs_antes2,
+    f"antes={msgs_antes2}, después={msgs_despues2}"
+)
+
+subtitulo("Test 10.7: Conversación real con nombre en caché (sin foto)")
+mem_sin_foto = PersistentMemory(memory_file="data/test_sinfoto.json", max_conversations=5)
+resp_cache1, _ = preguntar_llm("Hola, me llamo Laura", persona=None, memoria=mem_sin_foto)
+print(f"  {INFO}  Respuesta 1 (anónimo): {resp_cache1}")
+# La segunda pregunta también es anónima (sin foto no hay persona persistente)
+resp_cache2, _ = preguntar_llm("¿Cómo me llamo?", persona=None, memoria=mem_sin_foto)
+print(f"  {INFO}  Respuesta 2 (anónimo): {resp_cache2}")
+# Sin contexto de persona, el modelo no debería saber el nombre
+# (la sesión anónima sobrescribe, así que no tiene el turno anterior)
+registrar(
+    "Sin foto: contexto anónimo no acumula historial entre preguntas",
+    len(mem_sin_foto.session_memory) <= 2,
+    f"mensajes en sesión: {len(mem_sin_foto.session_memory)}"
+)
+
+
 titulo("RESUMEN DE RESULTADOS")
 
 total  = len(resultados)
@@ -515,7 +652,8 @@ print(f"\n  {INFO}  Resultados guardados en {out_path}")
 # Limpiar archivos temporales de prueba
 for f in ["data/test_anonimo.json", "data/test_persona.json",
           "data/test_persona_fresh.json", "data/test_ctx.json",
-          "data/test_ctx2.json", "data/test_real.json", "data/test_conv.json"]:
+          "data/test_ctx2.json", "data/test_real.json", "data/test_conv.json",
+          "data/test_cache.json", "data/test_foto.json", "data/test_sinfoto.json"]:
     Path(f).unlink(missing_ok=True)
 
 print()

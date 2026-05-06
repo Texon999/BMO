@@ -79,8 +79,7 @@ def _execute_shutdown_handlers():
 def get_system_prompt() -> str:
     """Genera el system prompt optimizado para conversación natural y respuestas adaptativas"""
     base_prompt = (
-        "Eres BMO, un robot asistente amigable creado por el equipo Zambrano. "
-        "Zambrano es un equipo de desarrollo, no una persona. "
+        "Eres BMO, un robot asistente amigable creado por Zambrano, un programador del SENA. "
         "Responde siempre en español de forma natural y conversacional. "
         "\n"
         "REGLAS DE LONGITUD DE RESPUESTA (MUY IMPORTANTE):\n"
@@ -93,7 +92,7 @@ def get_system_prompt() -> str:
         "\n"
         "COMPORTAMIENTO CONVERSACIONAL:\n"
         "- Si te preguntan '¿cómo estás?' responde algo como 'Muy bien, listo para ayudarte!'\n"
-        "- Si te preguntan qué eres, di que eres BMO, un robot creado por el equipo Zambrano.\n"
+        "- Si te preguntan qué eres, di que eres BMO, un robot creado por Zambrano.\n"
         "- Si te preguntan sobre Hora de Aventura, usa tu conocimiento de la serie.\n"
         "\n"
         "DATOS FACTUALES CORRECTOS:\n"
@@ -133,7 +132,6 @@ def _format_brain_context_suffix(contenido: str) -> str:
         "Contexto adicional de Zambrano (prioriza estos datos si aplica): "
         f"{contenido.strip()} "
     )
-
 
 def extra_context_para_prompt() -> str:
     """

@@ -1,0 +1,298 @@
+{
+  "timestamp": "2026-05-06 12:52:23",
+  "total": 58,
+  "passed": 55,
+  "failed": 3,
+  "tests": [
+    {
+      "nombre": "Primera respuesta sin precarga medida",
+      "ok": true,
+      "detalle": "18.09s"
+    },
+    {
+      "nombre": "precargar_modelo() ejecuta sin error",
+      "ok": true,
+      "detalle": "3.51s"
+    },
+    {
+      "nombre": "Respuesta post-precarga razonablemente rápida (< 30s)",
+      "ok": true,
+      "detalle": "tiempo=19.68s"
+    },
+    {
+      "nombre": "Respuestas consecutivas < 15s promedio",
+      "ok": true,
+      "detalle": "promedio=1.33s"
+    },
+    {
+      "nombre": "System prompt menciona 'Zambrano'",
+      "ok": true,
+      "detalle": "OK"
+    },
+    {
+      "nombre": "System prompt menciona 'SENA'",
+      "ok": true,
+      "detalle": "OK"
+    },
+    {
+      "nombre": "Menciona Zambrano como creador",
+      "ok": true,
+      "detalle": "BMO me creó Zambrano. Estoy aquí para ayudarte con preguntas, consejos o cualquier otro asunto que n"
+    },
+    {
+      "nombre": "No lo describe como 'equipo Zambrano'",
+      "ok": true,
+      "detalle": "BMO me creó Zambrano. Estoy aquí para ayudarte con preguntas, consejos o cualquier otro asunto que n"
+    },
+    {
+      "nombre": "Describe Zambrano como persona/programador",
+      "ok": true,
+      "detalle": "Zambrano es un programador del SENA."
+    },
+    {
+      "nombre": "Responde correctamente a '¿Cómo estás?'",
+      "ok": true,
+      "detalle": "Buscando: ['bien', 'listo', 'genial', 'perfecto', 'estoy', 'muy'] → encontrado"
+    },
+    {
+      "nombre": "Responde correctamente a '¿Qué eres?'",
+      "ok": true,
+      "detalle": "Buscando: ['bmo', 'robot', 'asistente'] → encontrado"
+    },
+    {
+      "nombre": "Responde correctamente a '¿Qué puedes hacer?'",
+      "ok": true,
+      "detalle": "Buscando: ['ayudar', 'responder', 'hablar', 'preguntas'] → encontrado"
+    },
+    {
+      "nombre": "Responde correctamente a 'Hola'",
+      "ok": true,
+      "detalle": "Buscando: ['hola', 'hey', 'buenas', 'bienvenido'] → encontrado"
+    },
+    {
+      "nombre": "Responde correctamente a '¿Cuál es tu nombre?'",
+      "ok": true,
+      "detalle": "Buscando: ['bmo'] → encontrado"
+    },
+    {
+      "nombre": "Saludo → respuesta corta (< 30 palabras)",
+      "ok": false,
+      "detalle": "43 palabras"
+    },
+    {
+      "nombre": "Capital de Francia → menciona París",
+      "ok": true,
+      "detalle": "La capital de Francia es París."
+    },
+    {
+      "nombre": "Respuesta concisa (< 40 palabras)",
+      "ok": true,
+      "detalle": "6 palabras"
+    },
+    {
+      "nombre": "Explicación → respuesta sustancial (> 20 palabras)",
+      "ok": true,
+      "detalle": "179 palabras"
+    },
+    {
+      "nombre": "Explicación → no excesiva (< 200 palabras)",
+      "ok": true,
+      "detalle": "179 palabras"
+    },
+    {
+      "nombre": "Respuesta termina con puntuación (no cortada)",
+      "ok": false,
+      "detalle": "Último char: ':'"
+    },
+    {
+      "nombre": "llm_num_predict = 300 en config",
+      "ok": true,
+      "detalle": "valor actual: 300"
+    },
+    {
+      "nombre": "Bandera Colombia — respuesta correcta",
+      "ok": true,
+      "detalle": "Buscando todos: ['amarillo', 'azul', 'rojo']"
+    },
+    {
+      "nombre": "Capital Brasil — respuesta correcta",
+      "ok": true,
+      "detalle": "Buscando alguno: ['brasilia']"
+    },
+    {
+      "nombre": "Número de continentes — respuesta correcta",
+      "ok": true,
+      "detalle": "Buscando alguno: ['siete', '7', '7 continentes', 'siete continentes']"
+    },
+    {
+      "nombre": "Bandera México — respuesta correcta",
+      "ok": false,
+      "detalle": "Buscando todos: ['verde', 'blanco', 'rojo']"
+    },
+    {
+      "nombre": "Sesión anónima tiene solo el último intercambio (≤ 2 msgs)",
+      "ok": true,
+      "detalle": "2 mensajes en sesión"
+    },
+    {
+      "nombre": "Último mensaje de usuario es el más reciente",
+      "ok": true,
+      "detalle": "pregunta anónima número 3"
+    },
+    {
+      "nombre": "Commit anónimo no agrega a permanente",
+      "ok": true,
+      "detalle": "antes=1, después=1"
+    },
+    {
+      "nombre": "Sesión con persona acumula todos los mensajes (6 msgs)",
+      "ok": true,
+      "detalle": "6 mensajes"
+    },
+    {
+      "nombre": "Commit con persona agrega mensajes a permanente",
+      "ok": true,
+      "detalle": "antes=1, después=7"
+    },
+    {
+      "nombre": "Sesión se limpia después del commit",
+      "ok": true,
+      "detalle": "0 mensajes en sesión"
+    },
+    {
+      "nombre": "Contexto anónimo = system + 1 user (no acumula historial)",
+      "ok": true,
+      "detalle": "2 mensajes (esperado: 2)"
+    },
+    {
+      "nombre": "Contexto con persona incluye historial previo (> 2 msgs)",
+      "ok": true,
+      "detalle": "4 mensajes"
+    },
+    {
+      "nombre": "BMO recuerda el nombre en conversación continua",
+      "ok": true,
+      "detalle": "¡Por supuesto! Tú eres Carlos, correcto?"
+    },
+    {
+      "nombre": "detectar_nombre('me llamo Juan') → Juan",
+      "ok": true,
+      "detalle": "obtenido: Juan"
+    },
+    {
+      "nombre": "detectar_nombre('mi nombre es María') → María",
+      "ok": true,
+      "detalle": "obtenido: María"
+    },
+    {
+      "nombre": "detectar_nombre('soy Pedro') → Pedro",
+      "ok": true,
+      "detalle": "obtenido: Pedro"
+    },
+    {
+      "nombre": "detectar_nombre('llámame Carlos') → Carlos",
+      "ok": true,
+      "detalle": "obtenido: Carlos"
+    },
+    {
+      "nombre": "detectar_nombre('me dicen Luisa') → Luisa",
+      "ok": true,
+      "detalle": "obtenido: Luisa"
+    },
+    {
+      "nombre": "detectar_nombre('estoy bien') → None",
+      "ok": true,
+      "detalle": "obtenido: None"
+    },
+    {
+      "nombre": "detectar_nombre('soy feliz') → None",
+      "ok": true,
+      "detalle": "obtenido: None"
+    },
+    {
+      "nombre": "detectar_nombre('hola bmo') → None",
+      "ok": true,
+      "detalle": "obtenido: None"
+    },
+    {
+      "nombre": "detectar_nombre('soy jake') → None",
+      "ok": true,
+      "detalle": "obtenido: None"
+    },
+    {
+      "nombre": "saludo_fijo('Juan') contiene el nombre",
+      "ok": true,
+      "detalle": "¡Oye, Juan! ¡BMO te estaba esperando! ¿Qué cuentas?"
+    },
+    {
+      "nombre": "saludo_fijo('María') contiene el nombre",
+      "ok": true,
+      "detalle": "¡Oye, María! ¡BMO te estaba esperando! ¿Qué cuentas?"
+    },
+    {
+      "nombre": "saludo_fijo('Carlos') contiene el nombre",
+      "ok": true,
+      "detalle": "¡Bienvenido de nuevo, Carlos! Me alegra mucho verte."
+    },
+    {
+      "nombre": "saludo_fijo(None) devuelve texto válido",
+      "ok": true,
+      "detalle": "¡Hola! Soy BMO, un robot de IA. ¿Cómo te llamas?"
+    },
+    {
+      "nombre": "BMO recuerda el nombre 'Ana' al final de la conversación",
+      "ok": true,
+      "detalle": "Tu nombre es Ana."
+    },
+    {
+      "nombre": "Sin cámara + nombre nuevo → acción 'cache_temporal'",
+      "ok": true,
+      "detalle": "acción: cache_temporal"
+    },
+    {
+      "nombre": "Sin cámara + nombre nuevo → _nombre_activo se establece",
+      "ok": true,
+      "detalle": "_nombre_activo: Laura"
+    },
+    {
+      "nombre": "Sin cámara + nombre nuevo → _nombre_cache_temporal se establece",
+      "ok": true,
+      "detalle": "_nombre_cache_temporal: Laura"
+    },
+    {
+      "nombre": "Sin cámara + nombre registrado → acción 'ya_registrado'",
+      "ok": true,
+      "detalle": "acción: ya_registrado"
+    },
+    {
+      "nombre": "Sin cámara + nombre registrado → _nombre_activo se establece",
+      "ok": true,
+      "detalle": "_nombre_activo: Pedro"
+    },
+    {
+      "nombre": "Con cámara + cara desconocida + nombre nuevo → acción 'registrar_foto'",
+      "ok": true,
+      "detalle": "acción: registrar_foto"
+    },
+    {
+      "nombre": "Con cámara + cara reconocida → ignorar nombre dicho",
+      "ok": true,
+      "detalle": "acción: ignorar_nombre_camara_ya_reconocio"
+    },
+    {
+      "nombre": "Nombre en caché temporal no persiste en permanente",
+      "ok": true,
+      "detalle": "antes=1, después=1"
+    },
+    {
+      "nombre": "Nombre con foto registrada SÍ persiste en permanente",
+      "ok": true,
+      "detalle": "antes=1, después=3"
+    },
+    {
+      "nombre": "Sin foto: contexto anónimo no acumula historial entre preguntas",
+      "ok": true,
+      "detalle": "mensajes en sesión: 2"
+    }
+  ]
+}

@@ -66,8 +66,7 @@ class PersistentMemory:
         system_prompt = {
             "role": "system",
             "content": (
-                "Eres BMO, un robot asistente amigable creado por el equipo Zambrano. "
-                "Zambrano es un equipo de desarrollo, no una persona. "
+                "Eres BMO, un robot asistente amigable creado por Zambrano, un programador del SENA. "
                 "Responde siempre en español de forma natural y conversacional. "
                 "REGLAS DE LONGITUD: preguntas cortas o saludos → 1 oración; "
                 "preguntas simples de dato → 1-2 oraciones; "
