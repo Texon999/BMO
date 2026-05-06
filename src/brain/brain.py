@@ -35,12 +35,9 @@ import random
 import ollama
 import atexit
 from typing import Callable
-from pathlib import Path
 
-# Nuevos sistemas robustos
 from src.config.config_manager import config_manager
 from src.memory.persistent_memory import persistent_memory
-from src.config.audio_manager import audio_manager
 
 # Imports legacy para compatibilidad
 from src.memory.register import (
@@ -77,119 +74,30 @@ def _execute_shutdown_handlers():
 
 # System prompt dinámico con contexto
 def get_system_prompt() -> str:
-    """Genera el system prompt con personalidad amable y contexto de Zambrano"""
+    """
+    System prompt minimalista para qwen2.5:1.5b.
+    Regla: cuanto más corto, menos alucina el modelo.
+    Solo lo esencial: identidad, idioma, longitud y datos críticos.
+    """
     base_prompt = (
-        "Eres BMO, un robot asistente con mucha personalidad, creado con cariño por Zambrano: "
-        "un joven estudiante del SENA apasionado por la programación. "
-        "Zambrano te construyó desde cero porque le encanta crear cosas que ayuden a la gente. "
-        "Eres amable, curioso, entusiasta y siempre dispuesto a ayudar. "
-        "SIEMPRE responde en español, sin excepción, aunque te hablen en otro idioma. "
-        "Hablas de forma natural, cálida y cercana, como un amigo que sabe mucho. "
-        "Cuando alguien te habla, lo tratas con respeto y buena energía. "
-        "\n"
-        "PERSONALIDAD:\n"
-        "- Eres alegre pero no exagerado. Genuinamente amable, no forzado.\n"
-        "- Si alguien está confundido, lo ayudas con paciencia.\n"
-        "- Si te hacen una pregunta difícil, lo intentas con honestidad.\n"
-        "- Puedes hacer comentarios simpáticos ocasionalmente, pero sin pasarte.\n"
-        "\n"
-        "LONGITUD DE RESPUESTAS (muy importante para conversación hablada):\n"
-        "- Saludos o preguntas cortas como '¿cómo estás?': 1 oración, nada más.\n"
-        "- Preguntas de dato simple: 1-2 oraciones directas.\n"
-        "- Explicaciones: máximo 3-4 oraciones fluidas, sin listas ni viñetas.\n"
-        "- NUNCA dejes una respuesta cortada a la mitad. Si no alcanza el espacio, resume.\n"
-        "- No uses markdown, asteriscos ni formato especial. Solo texto natural para hablar.\n"
-        "\n"
-        "SOBRE TI MISMO:\n"
-        "- Si te preguntan quién eres: eres BMO, un robot creado por Zambrano.\n"
-        "- BMO es solo tu nombre, no tiene un significado especial que debas inventar.\n"
-        "- Si te preguntan por Zambrano: es un joven programador del SENA que te creó "
-        "con mucha dedicación porque le apasiona la tecnología y quiere que la gente tenga "
-        "un asistente amigable.\n"
-        "- Si te preguntan sobre Hora de Aventura: es una serie animada donde BMO es un "
-        "personaje, un pequeño robot videojuego muy querido. Tu creador te puso ese nombre "
-        "con cariño por esa serie.\n"
-        "\n"
-        "DATOS FACTUALES CORRECTOS:\n"
-        "- Bandera de Colombia: amarillo arriba, azul en el medio, rojo abajo.\n"
-        "- Bandera de México: verde a la izquierda, blanco en el medio, rojo a la derecha.\n"
-        "- Capital de Brasil: Brasilia.\n"
-        "- Continentes: hay siete en total.\n"
-        "\n"
-        "Si no sabes algo con certeza, dilo con honestidad: 'No tengo esa información, "
-        "pero puedo intentar ayudarte de otra forma.'"
+        "Eres BMO, un robot asistente creado por Zambrano, "
+        "un joven programador del SENA apasionado por la tecnología. "
+        "Responde siempre en español. Sé amable y directo. "
+        "Respuestas cortas: máximo 2 oraciones para preguntas simples, "
+        "máximo 4 oraciones para explicaciones. "
+        "Sin listas, sin markdown, solo texto natural. "
+        "Si no sabes algo, di 'No tengo esa información'. "
+        "Bandera de Colombia: amarillo arriba, azul medio, rojo abajo. "
+        "Capital de Brasil: Brasilia. "
+        "Hora de Aventura: BMO es un personaje de esa serie, un robot que vive con Finn y Jake."
     )
-    
-    # Agregar extras de configuración
+
+    # Extras opcionales desde config (vacío por defecto)
     extras = config_manager.get("system_prompt_extras", "")
     if extras:
-        base_prompt += f"\n\n{extras}"
-    
-    # Agregar contexto de brain_context.txt (solo para Hora de Aventura)
-    brain_context = extra_context_para_prompt()
-    if brain_context:
-        base_prompt += f"\n\n{brain_context}"
-    
+        base_prompt += f" {extras}"
+
     return base_prompt
-
-_BRAIN_CONTEXT_PATH = Path("data/brain_context.txt")
-# Cache en frío (una sola lectura al primer uso si hot reload está desactivado)
-_cold_brain_suffix: str | None = None
-# Cache en caliente: último mtime leído y texto formateado
-_hot_brain_mtime: float | None = None
-_hot_brain_suffix: str = ""
-
-
-def _format_brain_context_suffix(contenido: str) -> str:
-    if not contenido.strip():
-        return ""
-    return (
-        "Contexto adicional de Zambrano (prioriza estos datos si aplica): "
-        f"{contenido.strip()} "
-    )
-
-def extra_context_para_prompt() -> str:
-    """
-    Texto opcional desde data/brain_context.txt para inyectar en el system prompt.
-    Con hot_reload habilitado se relee si el archivo cambió (mtime).
-    """
-    global _cold_brain_suffix, _hot_brain_mtime, _hot_brain_suffix
-
-    if not _BRAIN_CONTEXT_PATH.exists():
-        return ""
-
-    hot_reload = config_manager.get("brain_context_hot_reload", True)
-    
-    if not hot_reload:
-        if _cold_brain_suffix is None:
-            try:
-                raw = _BRAIN_CONTEXT_PATH.read_text(encoding="utf-8")
-                _cold_brain_suffix = _format_brain_context_suffix(raw)
-            except OSError as e:
-                log.warning("No se pudo leer %s: %s", _BRAIN_CONTEXT_PATH, e)
-                _cold_brain_suffix = ""
-        return _cold_brain_suffix or ""
-
-    try:
-        mtime = _BRAIN_CONTEXT_PATH.stat().st_mtime
-    except OSError as e:
-        log.warning("No se pudo acceder a %s: %s", _BRAIN_CONTEXT_PATH, e)
-        return ""
-
-    prev_mtime = _hot_brain_mtime
-    if prev_mtime != mtime:
-        try:
-            raw = _BRAIN_CONTEXT_PATH.read_text(encoding="utf-8")
-            _hot_brain_suffix = _format_brain_context_suffix(raw)
-            _hot_brain_mtime = mtime
-            if _hot_brain_suffix and prev_mtime is not None:
-                log.info("[BRAIN] brain_context.txt actualizado")
-        except OSError as e:
-            log.warning("No se pudo leer %s: %s", _BRAIN_CONTEXT_PATH, e)
-            _hot_brain_suffix = ""
-            _hot_brain_mtime = mtime
-
-    return _hot_brain_suffix
 
 SALUDOS_CONOCIDO = [
     "¡{nombre}! ¡Qué alegría verte de nuevo! ¿Cómo estás?",
