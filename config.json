@@ -11,7 +11,7 @@
   "llm_temperature": 0.75,
   "llm_top_k": 50,
   "llm_top_p": 0.90,
-  "llm_num_predict": 200,
+  "llm_num_predict": 300,
   "llm_repeat_penalty": 1.1,
   "llm_num_thread": 4,
   "llm_keep_alive": -1,

@@ -139,19 +139,21 @@ class PersistentMemory:
         
         if persona:
             # Con persona: incluir historial permanente filtrado por esa persona
-            # (o todo el historial si no hay filtro por persona)
             persona_history = [
                 m for m in self.permanent_memory[1:]
                 if m.get("persona") == persona or m.get("role") == "assistant"
                    or "persona" not in m
             ]
             # Limitar a las últimas MAX_PERSONA_HISTORY_MSGS para no saturar el contexto
-            MAX_PERSONA_HISTORY_MSGS = 10  # 5 intercambios
+            MAX_PERSONA_HISTORY_MSGS = 6  # 3 intercambios del historial permanente
             if len(persona_history) > MAX_PERSONA_HISTORY_MSGS:
                 persona_history = persona_history[-MAX_PERSONA_HISTORY_MSGS:]
             context.extend(persona_history)
-            # Sesión actual completa
-            context.extend(self.session_memory)
+            
+            # Sesión actual: limitar a los últimos 4 mensajes (2 intercambios recientes)
+            MAX_SESSION_MSGS = 4
+            session_reciente = self.session_memory[-MAX_SESSION_MSGS:] if len(self.session_memory) > MAX_SESSION_MSGS else self.session_memory
+            context.extend(session_reciente)
         else:
             # Anónimo: solo el último mensaje de sesión (ya fue sobrescrito en add_user_message)
             context.extend(self.session_memory)
