@@ -11,7 +11,6 @@ Características:
 import json
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional
 import atexit
 from datetime import datetime
 
@@ -67,13 +66,19 @@ class PersistentMemory:
         system_prompt = {
             "role": "system",
             "content": (
-                "Eres BMO, un robot asistente amigable creado por Zambrano. "
-                "Responde en español de forma natural y útil. "
+                "Eres BMO, un robot asistente amigable creado por el equipo Zambrano. "
+                "Zambrano es un equipo de desarrollo, no una persona. "
+                "Responde siempre en español de forma natural y conversacional. "
+                "REGLAS DE LONGITUD: preguntas cortas o saludos → 1 oración; "
+                "preguntas simples de dato → 1-2 oraciones; "
+                "preguntas que piden explicación → máximo 3-4 oraciones. "
+                "NUNCA cortes una respuesta a la mitad, si no cabe resume. "
+                "No uses listas con viñetas ni markdown, habla natural. "
+                "Si te preguntan cómo estás, responde algo como 'Muy bien, listo para ayudarte!'. "
                 "Si te preguntan sobre Hora de Aventura, usa tu conocimiento de la serie. "
-                "Para datos factuales (banderas, geografía, historia), sé muy preciso. "
-                "La bandera de Colombia tiene tres franjas: amarillo (arriba), azul (medio) y rojo (abajo). "
-                "Si no estás 100% seguro de un dato, di 'No estoy seguro de esa información'. "
-                "Sé directo pero amigable, máximo 2-3 oraciones."
+                "La bandera de Colombia: amarillo arriba, azul medio, rojo abajo. "
+                "Capital de Brasil: Brasilia. "
+                "Si no estás seguro de un dato, di 'No tengo esa información'."
             ),
             "timestamp": datetime.now().isoformat()
         }
@@ -83,8 +88,13 @@ class PersistentMemory:
         else:
             self.permanent_memory.insert(0, system_prompt)
     
-    def add_user_message(self, content: str, persona: Optional[str] = None):
-        """Agrega un mensaje del usuario"""
+    def add_user_message(self, content: str, persona: str | None = None):
+        """Agrega un mensaje del usuario.
+        
+        - Sin persona (anónimo): la sesión solo guarda el último intercambio
+          (sobrescribe) para no acumular contexto de desconocidos.
+        - Con persona registrada: acumula normalmente en sesión.
+        """
         message = {
             "role": "user",
             "content": content,
@@ -93,12 +103,16 @@ class PersistentMemory:
         
         if persona:
             message["persona"] = persona
+            self.session_memory.append(message)
+        else:
+            # Anónimo: solo conservar el último mensaje de usuario
+            # (eliminar mensajes anteriores de sesión para no acumular)
+            self.session_memory = [message]
             
-        self.session_memory.append(message)
-        log.debug(f"[MEMORY] Added user message: {content[:50]}...")
+        log.debug(f"[MEMORY] Added user message (persona={persona}): {content[:50]}...")
     
-    def add_assistant_message(self, content: str):
-        """Agrega un mensaje del asistente"""
+    def add_assistant_message(self, content: str, persona: str | None = None):
+        """Agrega un mensaje del asistente."""
         message = {
             "role": "assistant", 
             "content": content,
@@ -106,27 +120,41 @@ class PersistentMemory:
         }
         
         self.session_memory.append(message)
-        log.debug(f"[MEMORY] Added assistant message: {content[:50]}...")
-    
-    def get_context_for_llm(self, persona: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Obtiene el contexto completo para el LLM"""
+        log.debug(f"[MEMORY] Added assistant message: {content[:50]}...")    
+    def get_context_for_llm(self, persona: str | None = None) -> list[dict]:
+        """Obtiene el contexto completo para el LLM.
+        
+        - Con persona: system prompt + historial permanente de esa persona + sesión actual.
+        - Sin persona (anónimo): system prompt + solo el último mensaje de sesión
+          (no se acumula historial de desconocidos).
+        """
         context = []
         
         # System prompt (siempre primero)
         if self.permanent_memory and self.permanent_memory[0].get("role") == "system":
             system_msg = self.permanent_memory[0].copy()
-            
-            # Agregar contexto de persona si existe
             if persona:
                 system_msg["content"] += f" El usuario se llama {persona}."
-                
             context.append(system_msg)
         
-        # Memoria permanente (sin system prompt)
-        context.extend(self.permanent_memory[1:])
-        
-        # Memoria de sesión actual
-        context.extend(self.session_memory)
+        if persona:
+            # Con persona: incluir historial permanente filtrado por esa persona
+            # (o todo el historial si no hay filtro por persona)
+            persona_history = [
+                m for m in self.permanent_memory[1:]
+                if m.get("persona") == persona or m.get("role") == "assistant"
+                   or "persona" not in m
+            ]
+            # Limitar a las últimas MAX_PERSONA_HISTORY_MSGS para no saturar el contexto
+            MAX_PERSONA_HISTORY_MSGS = 10  # 5 intercambios
+            if len(persona_history) > MAX_PERSONA_HISTORY_MSGS:
+                persona_history = persona_history[-MAX_PERSONA_HISTORY_MSGS:]
+            context.extend(persona_history)
+            # Sesión actual completa
+            context.extend(self.session_memory)
+        else:
+            # Anónimo: solo el último mensaje de sesión (ya fue sobrescrito en add_user_message)
+            context.extend(self.session_memory)
         
         return context
     
@@ -144,12 +172,27 @@ class PersistentMemory:
         self._add_system_prompt()
         self.save_memory()
     
-    def commit_session_to_permanent(self):
-        """Mueve la memoria de sesión a permanente"""
+    def commit_session_to_permanent(self, persona: str | None = None):
+        """Mueve la memoria de sesión a permanente.
+        
+        Solo persiste si hay una persona registrada (cara conocida).
+        Las conversaciones anónimas no se guardan en permanente.
+        """
         if not self.session_memory:
             return
+        
+        if persona is None:
+            # Sin persona registrada: no persistir, solo limpiar sesión
+            log.debug("[MEMORY] Sesión anónima, no se persiste en permanente")
+            self.session_memory = []
+            return
             
-        log.info(f"[MEMORY] Committing {len(self.session_memory)} messages to permanent")
+        log.info(f"[MEMORY] Guardando {len(self.session_memory)} mensajes de '{persona}' en permanente")
+        
+        # Etiquetar mensajes de usuario con la persona
+        for msg in self.session_memory:
+            if msg.get("role") == "user" and "persona" not in msg:
+                msg["persona"] = persona
         
         # Agregar mensajes de sesión a permanente
         self.permanent_memory.extend(self.session_memory)
@@ -217,7 +260,7 @@ class PersistentMemory:
         except Exception as e:
             log.error(f"[MEMORY] Failed to save: {e}")
     
-    def get_memory_stats(self) -> Dict[str, Any]:
+    def get_memory_stats(self) -> dict:
         """Obtiene estadísticas de memoria"""
         return {
             "permanent_messages": len(self.permanent_memory),

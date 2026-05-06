@@ -121,7 +121,7 @@ import ollama
 from src.display.display import DisplayBMO, Estado
 from src.vision.vision   import VisionBMO
 from src.voice.voice     import VozBMO
-from src.brain.brain     import responder_con_tts, detectar_nombre, saludo_fijo
+from src.brain.brain     import responder_con_tts, detectar_nombre, saludo_fijo, precargar_modelo
 from src.memory.register import nombres_a_ids
 from src.config.runtime import (
     CAMERA_INDEX,
@@ -273,7 +273,13 @@ class AgenteBMO:
 
     def _loop_logica(self):
         self.display.set_estado(Estado.WARMUP)
-        time.sleep(3.0)
+        
+        # Precargar el modelo LLM de forma bloqueante durante el warmup
+        # Así la primera respuesta real es igual de rápida que las siguientes
+        log.info("Precargando modelo LLM durante warmup...")
+        precargar_modelo()
+        
+        time.sleep(1.0)  # Pequeña pausa visual después de cargar
         log.info("BMO despierto")
 
         # Saludo inicial

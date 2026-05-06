@@ -77,21 +77,33 @@ def _execute_shutdown_handlers():
 
 # System prompt dinámico con contexto
 def get_system_prompt() -> str:
-    """Genera el system prompt optimizado para corregir errores específicos"""
+    """Genera el system prompt optimizado para conversación natural y respuestas adaptativas"""
     base_prompt = (
-        "Eres BMO, un robot asistente amigable creado por Zambrano. "
-        "Responde en español de forma natural y útil. "
-        "Si te preguntan sobre Hora de Aventura, usa tu conocimiento de la serie. "
+        "Eres BMO, un robot asistente amigable creado por el equipo Zambrano. "
+        "Zambrano es un equipo de desarrollo, no una persona. "
+        "Responde siempre en español de forma natural y conversacional. "
         "\n"
-        "CORRECCIONES IMPORTANTES:\n"
-        "- Bandera de Colombia: amarillo arriba, azul medio, rojo abajo\n"
-        "- Bandera de México: verde izquierda, blanco medio, rojo derecha\n"
-        "- Capital de Brasil: Brasilia (NO es Rio de Janeiro, NO es São Paulo)\n"
-        "- Continentes: hay siete continentes en total\n"
+        "REGLAS DE LONGITUD DE RESPUESTA (MUY IMPORTANTE):\n"
+        "- Preguntas cortas o conversacionales (saludos, '¿cómo estás?', '¿qué haces?'): "
+        "responde en 1 oración corta y natural.\n"
+        "- Preguntas simples de dato (capital, color de bandera, año): 1-2 oraciones.\n"
+        "- Preguntas que piden explicación o lista: máximo 3-4 oraciones, sin extenderte.\n"
+        "- NUNCA cortes una respuesta a la mitad. Si no cabe en el espacio, resume.\n"
+        "- No uses listas con viñetas ni formato markdown, habla de forma natural.\n"
         "\n"
-        "Para otros datos, usa tu conocimiento entrenado. Si no estás seguro, "
-        "di 'No tengo esa información específica'. "
-        "Sé directo pero amigable, máximo 2-3 oraciones."
+        "COMPORTAMIENTO CONVERSACIONAL:\n"
+        "- Si te preguntan '¿cómo estás?' responde algo como 'Muy bien, listo para ayudarte!'\n"
+        "- Si te preguntan qué eres, di que eres BMO, un robot creado por el equipo Zambrano.\n"
+        "- Si te preguntan sobre Hora de Aventura, usa tu conocimiento de la serie.\n"
+        "\n"
+        "DATOS FACTUALES CORRECTOS:\n"
+        "- Bandera de Colombia: amarillo arriba, azul medio, rojo abajo.\n"
+        "- Bandera de México: verde izquierda, blanco medio, rojo derecha.\n"
+        "- Capital de Brasil: Brasilia (no Rio de Janeiro, no São Paulo).\n"
+        "- Continentes: hay siete en total.\n"
+        "\n"
+        "Si no estás seguro de un dato, di 'No tengo esa información'. "
+        "Sé directo, amigable y natural como en una conversación real."
     )
     
     # Agregar extras de configuración
@@ -198,14 +210,24 @@ _NO_NOMBRES = {
 }
 
 
-def _precargar_modelo():
-    """Precarga el modelo LLM en RAM con configuración dinámica"""
+def precargar_modelo():
+    """
+    Precarga el modelo LLM en RAM de forma BLOQUEANTE.
+    Espera hasta que el modelo responda para garantizar que la primera
+    respuesta real sea rápida. Se llama desde el hilo de lógica antes
+    del saludo inicial.
+    """
     try:
         model = config_manager.get("text_model", "qwen2.5:1.5b")
+        log.info("[LLM] Precargando %s en RAM (puede tardar ~20s)...", model)
+        t0 = time.time()
         ollama.generate(model=model, prompt="hola", keep_alive=-1)
-        log.info("[LLM] %s en RAM", model)
+        log.info("[LLM] %s listo en RAM (%.1fs)", model, time.time() - t0)
     except Exception as e:
-        log.warning("[LLM] Error: %s — ejecuta: ollama serve", e)
+        log.warning("[LLM] Error al precargar: %s — ejecuta: ollama serve", e)
+
+# Alias privado para compatibilidad interna
+_precargar_modelo = precargar_modelo
 
 
 def cleanup_llm():
@@ -363,11 +385,11 @@ def responder_con_tts(
     
     # Guardar en memoria persistente
     if config_manager.get("chat_memory", True):
-        persistent_memory.add_assistant_message(respuesta_completa)
+        persistent_memory.add_assistant_message(respuesta_completa, nombre_persona)
         
-        # Auto-commit cada cierto número de mensajes
-        if len(persistent_memory.session_memory) >= 4:  # 2 intercambios
-            persistent_memory.commit_session_to_permanent()
+        # Auto-commit cada cierto número de mensajes (solo si hay persona registrada)
+        if nombre_persona and len(persistent_memory.session_memory) >= 4:  # 2 intercambios
+            persistent_memory.commit_session_to_permanent(nombre_persona)
     else:
         # Modo legacy
         if nombre_persona:
@@ -376,7 +398,6 @@ def responder_con_tts(
             agregar_turno_anonimo(mensaje, respuesta_completa)
 
 
-# Inicialización y registro de cleanup
-_precargar_modelo()
+# Registro de cleanup (la precarga se hace desde main.py de forma bloqueante)
 register_shutdown_handler(cleanup_llm)
 register_shutdown_handler(persistent_memory.save_memory)
