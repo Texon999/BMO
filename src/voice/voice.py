@@ -202,7 +202,8 @@ class VozBMO:
             silencio_post = np.zeros(int(0.5  * sr), dtype="float32")
             audio_np = np.concatenate([silencio_pre, audio_np, silencio_post])
             print(f"[TTS] {len(audio_np)/sr:.1f}s")
-            sd.play(audio_np, sr)
+            sd.play(audio_np *0.5, sr) 
+            # La multiplicación por 0.5 es para reducir el volumen, ya que algunas voces pueden ser muy fuerte
             sd.wait()
         except Exception as e:
             print(f"[TTS] Error: {e}")

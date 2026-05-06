@@ -171,7 +171,15 @@ class AgenteBMO:
     def __init__(self):
         log.info("=== Iniciando BMO ===")
         self.display = DisplayBMO()
-        self.vision  = VisionBMO(camera_index=CAMERA_INDEX)
+        
+        # Intentar inicializar visión, pero permitir degradación sin cámara
+        self.vision = None
+        try:
+            self.vision = VisionBMO(camera_index=CAMERA_INDEX)
+        except RuntimeError as e:
+            log.warning("  Cámara no disponible: %s", e)
+            log.warning("  BMO funcionará sin reconocimiento facial (solo audio)")
+        
         self.voz     = VozBMO(mic_device=MIC_DEVICE)
 
         self._running         = True
@@ -203,6 +211,10 @@ class AgenteBMO:
 
     def _loop_camara(self):
         """Lee la cámara y actualiza el nombre detectado con lógica pegajosa."""
+        if self.vision is None:
+            log.info("Hilo de cámara desactivado (sin cámara disponible)")
+            return
+            
         while self._running:
             ret, frame = self.vision.cap.read()
             if not ret:
@@ -339,6 +351,13 @@ class AgenteBMO:
     # ── Registro de persona ───────────────────────────────────────────────────
 
     def _registrar_persona(self, nombre: str):
+        if self.vision is None:
+            log.warning("No se puede registrar '%s': cámara no disponible", nombre)
+            self.display.set_estado(Estado.SPEAKING)
+            self.voz.hablar(f"Hola {nombre}, pero no tengo cámara para recordar tu cara. Continúa sin registro.")
+            self.display.set_estado(Estado.IDLE)
+            return
+            
         log.info(f"Iniciando registro: '{nombre}'")
         siguiente_id = self.vision.siguiente_id()
 
@@ -384,7 +403,8 @@ class AgenteBMO:
 
     def _apagar(self):
         log.info("Apagando BMO...")
-        self.vision.liberar()
+        if self.vision:
+            self.vision.liberar()
         self.display.cerrar()
 
 
