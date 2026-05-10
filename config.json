@@ -4,6 +4,8 @@
   "voice_model": "voices/es_ES-sharvard-medium.onnx",
   "chat_memory": true,
   "max_conversations": 10,
+  "mongo_uri": "mongodb://localhost:27017",
+  "mongo_db": "bmo_db",
   "enable_fact_checking": false,
   "camera_index": 0,
   "camera_rotation": 0,
