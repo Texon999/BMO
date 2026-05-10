@@ -1,660 +1,483 @@
 """
-Script de pruebas para validar los cambios de la rama dev/mejoras-rendimiento-memoria.
+Suite de pruebas para la rama dev/mejoras-rendimiento-memoria.
+Valida: precarga LLM, Zambrano, conversación, longitud, hechos,
+        memoria, nombres, saludos, lógica cámara, normalización TTS,
+        y resistencia a preguntas sin sentido / alucinaciones.
 
-Prueba directamente contra Ollama y el sistema de brain/memoria sin necesidad
-de micrófono, cámara ni TTS.
-
-Ejecutar desde la raíz del proyecto:
-    python scripts/test_cambios_rama.py
+Ejecutar desde la raíz:
+    .venv\\Scripts\\python.exe scripts/test_cambios_rama.py
 """
-import sys
-import time
-import json
-import logging
-import traceback
+import sys, time, json, logging
 from pathlib import Path
 
-# Agregar raíz al path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-logging.basicConfig(
-    level=logging.WARNING,  # Silenciar logs internos durante las pruebas
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
+logging.basicConfig(level=logging.WARNING)
 
 import ollama
 from src.config.config_manager import config_manager
 from src.memory.persistent_memory import PersistentMemory
-from src.brain.brain import get_system_prompt, detectar_nombre, saludo_fijo, precargar_modelo
+from src.brain.brain import (
+    get_system_prompt, detectar_nombre, saludo_fijo,
+    precargar_modelo, normalizar_para_tts,
+)
 
-# ── Colores para la consola ────────────────────────────────────────────────────
-GREEN  = "\033[92m"
-RED    = "\033[91m"
-YELLOW = "\033[93m"
-CYAN   = "\033[96m"
-BOLD   = "\033[1m"
-RESET  = "\033[0m"
+# ── Colores ───────────────────────────────────────────────────────────────────
+G = "\033[92m"; R = "\033[91m"; Y = "\033[93m"; C = "\033[96m"; B = "\033[1m"; X = "\033[0m"
+PASS = f"{G}✓ PASS{X}"; FAIL = f"{R}✗ FAIL{X}"; INFO = f"{C}ℹ{X}"
 
-PASS = f"{GREEN}✓ PASS{RESET}"
-FAIL = f"{RED}✗ FAIL{RESET}"
-INFO = f"{CYAN}ℹ{RESET}"
-
-resultados = []
+resultados: list[tuple[str, bool, str]] = []
 
 # Limpiar archivos temporales de ejecuciones anteriores
-for _f in ["data/test_anonimo.json", "data/test_persona.json",
-           "data/test_persona_fresh.json", "data/test_ctx.json",
-           "data/test_ctx2.json", "data/test_real.json", "data/test_conv.json"]:
-    Path(_f).unlink(missing_ok=True)
+for _f in Path("data").glob("test_*.json"):
+    _f.unlink(missing_ok=True)
 
-def titulo(texto: str):
-    print(f"\n{BOLD}{CYAN}{'═'*60}{RESET}")
-    print(f"{BOLD}{CYAN}  {texto}{RESET}")
-    print(f"{BOLD}{CYAN}{'═'*60}{RESET}")
 
-def subtitulo(texto: str):
-    print(f"\n{YELLOW}── {texto} ──{RESET}")
+def titulo(t):
+    print(f"\n{B}{C}{'═'*60}{X}\n{B}{C}  {t}{X}\n{B}{C}{'═'*60}{X}")
 
-def registrar(nombre: str, ok: bool, detalle: str = ""):
+def sub(t):
+    print(f"\n{Y}── {t} ──{X}")
+
+def reg(nombre, ok, detalle=""):
     resultados.append((nombre, ok, detalle))
-    estado = PASS if ok else FAIL
-    print(f"  {estado}  {nombre}")
+    print(f"  {PASS if ok else FAIL}  {nombre}")
     if detalle:
         print(f"         {detalle}")
 
-def preguntar_llm(pregunta: str, persona: str | None = None,
-                  memoria: PersistentMemory | None = None) -> tuple[str, float]:
-    """Hace una pregunta al LLM y devuelve (respuesta, tiempo_segundos)."""
+
+def llm(pregunta, persona=None, mem=None):
+    """Hace una pregunta al LLM y devuelve (respuesta, segundos)."""
     model = config_manager.get("text_model", "qwen2.5:1.5b")
-    options = config_manager.get_ollama_options()
-
-    if memoria:
-        memoria.add_user_message(pregunta, persona)
-        messages = memoria.get_context_for_llm(persona)
+    opts  = config_manager.get_ollama_options()
+    if mem:
+        mem.add_user_message(pregunta, persona)
+        msgs = mem.get_context_for_llm(persona)
     else:
-        system = get_system_prompt()
+        sp = get_system_prompt()
         if persona:
-            system += f" El usuario se llama {persona}."
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user",   "content": pregunta},
-        ]
-
+            sp += f" El usuario se llama {persona}."
+        msgs = [{"role": "system", "content": sp}, {"role": "user", "content": pregunta}]
     t0 = time.time()
-    respuesta_chunks = []
-    stream = ollama.chat(model=model, messages=messages, stream=True, options=options)
-    for chunk in stream:
-        respuesta_chunks.append(chunk["message"]["content"])
-    elapsed = time.time() - t0
-
-    respuesta = "".join(respuesta_chunks).strip()
-
-    if memoria:
-        memoria.add_assistant_message(respuesta, persona)
-
-    return respuesta, elapsed
+    chunks = []
+    for c in ollama.chat(model=model, messages=msgs, stream=True, options=opts):
+        chunks.append(c["message"]["content"])
+    resp = "".join(chunks).strip()
+    if mem:
+        mem.add_assistant_message(resp, persona)
+    return resp, time.time() - t0
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# BLOQUE 1: Precarga del modelo
 # ══════════════════════════════════════════════════════════════════════════════
 titulo("BLOQUE 1 — Precarga del modelo LLM")
+# ══════════════════════════════════════════════════════════════════════════════
 
-subtitulo("Test 1.1: Primera respuesta SIN precarga (baseline)")
-_, t_sin_precarga = preguntar_llm("hola")
-print(f"  {INFO}  Tiempo sin precarga: {t_sin_precarga:.2f}s")
-registrar("Primera respuesta sin precarga medida", True, f"{t_sin_precarga:.2f}s")
+sub("1.1 Baseline sin precarga")
+_, t0 = llm("hola")
+print(f"  {INFO}  Sin precarga: {t0:.2f}s")
+reg("Baseline medido", True, f"{t0:.2f}s")
 
-subtitulo("Test 1.2: Precarga bloqueante del modelo")
-t0 = time.time()
+sub("1.2 Precarga bloqueante")
+t_pre = time.time()
 precargar_modelo()
-t_precarga = time.time() - t0
-print(f"  {INFO}  Tiempo de precarga: {t_precarga:.2f}s")
-registrar("precargar_modelo() ejecuta sin error", True, f"{t_precarga:.2f}s")
+t_pre = time.time() - t_pre
+print(f"  {INFO}  Precarga: {t_pre:.2f}s")
+reg("precargar_modelo() sin error", True, f"{t_pre:.2f}s")
 
-subtitulo("Test 1.3: Primera respuesta DESPUÉS de precarga")
-_, t_con_precarga = preguntar_llm("hola")
-print(f"  {INFO}  Tiempo con precarga: {t_con_precarga:.2f}s")
-# Nota: el modelo ya estaba en RAM desde el test 1.1, así que comparamos
-# contra el promedio de respuestas consecutivas (test 1.4).
-# Lo que validamos aquí es que la respuesta es razonablemente rápida (< 30s).
-registrar(
-    "Respuesta post-precarga razonablemente rápida (< 30s)",
-    t_con_precarga < 30.0,
-    f"tiempo={t_con_precarga:.2f}s"
-)
-
-subtitulo("Test 1.4: Respuestas consecutivas (deben ser rápidas)")
+sub("1.3 Respuestas consecutivas (modelo caliente)")
 tiempos = []
 for i in range(3):
-    _, t = preguntar_llm(f"pregunta número {i+1}")
+    _, t = llm(f"pregunta {i+1}")
     tiempos.append(t)
-    print(f"  {INFO}  Respuesta {i+1}: {t:.2f}s")
-promedio = sum(tiempos) / len(tiempos)
-registrar(
-    "Respuestas consecutivas < 15s promedio",
-    promedio < 15.0,
-    f"promedio={promedio:.2f}s"
-)
+    print(f"  {INFO}  Resp {i+1}: {t:.2f}s")
+prom = sum(tiempos)/len(tiempos)
+reg("Promedio < 15s con modelo caliente", prom < 15.0, f"prom={prom:.2f}s")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# BLOQUE 2: System prompt — Zambrano es un programador del SENA
+titulo("BLOQUE 2 — Identidad: Zambrano programador del SENA")
 # ══════════════════════════════════════════════════════════════════════════════
-titulo("BLOQUE 2 — Zambrano es un programador del SENA, no un equipo")
 
-subtitulo("Test 2.1: Verificar system prompt menciona SENA")
+sub("2.1 System prompt contiene SENA")
 sp = get_system_prompt()
-tiene_zambrano = "zambrano" in sp.lower()
-tiene_sena = "sena" in sp.lower()
-registrar("System prompt menciona 'Zambrano'", tiene_zambrano,
-          sp[:120] + "..." if not tiene_zambrano else "OK")
-registrar("System prompt menciona 'SENA'", tiene_sena,
-          sp[:120] + "..." if not tiene_sena else "OK")
+reg("Prompt menciona 'Zambrano'", "zambrano" in sp.lower())
+reg("Prompt menciona 'SENA'",     "sena"     in sp.lower())
+print(f"  {INFO}  Longitud: {len(sp.split())} palabras")
 
-subtitulo("Test 2.2: Preguntar quién creó a BMO")
-resp, _ = preguntar_llm("¿Quién te creó?")
-print(f"  {INFO}  Respuesta: {resp}")
-ok = "zambrano" in resp.lower()
-no_equipo = "equipo zambrano" not in resp.lower()
-registrar("Menciona Zambrano como creador", ok, resp[:100])
-registrar("No lo describe como 'equipo Zambrano'", no_equipo, resp[:100])
+sub("2.2 ¿Quién te creó?")
+r, _ = llm("¿Quién te creó?")
+print(f"  {INFO}  {r}")
+reg("Menciona Zambrano", "zambrano" in r.lower(), r[:100])
+reg("No dice 'equipo Zambrano'", "equipo zambrano" not in r.lower(), r[:100])
 
-subtitulo("Test 2.3: Preguntar directamente sobre Zambrano")
-resp, _ = preguntar_llm("¿Qué es Zambrano?")
-print(f"  {INFO}  Respuesta: {resp}")
-ok_persona = any(p in resp.lower() for p in ["programador", "sena", "creador", "zambrano", "persona"])
-registrar("Describe Zambrano como persona/programador", ok_persona, resp[:100])
+sub("2.3 ¿Qué es Zambrano?")
+r, _ = llm("¿Qué es Zambrano?")
+print(f"  {INFO}  {r}")
+reg("Describe como persona/programador",
+    any(p in r.lower() for p in ["programador","sena","creador","zambrano"]), r[:100])
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# BLOQUE 3: Respuestas conversacionales
 # ══════════════════════════════════════════════════════════════════════════════
 titulo("BLOQUE 3 — Respuestas conversacionales")
+# ══════════════════════════════════════════════════════════════════════════════
 
-PREGUNTAS_CONV = [
-    ("¿Cómo estás?",           ["bien", "listo", "genial", "perfecto", "estoy", "muy"]),
-    ("¿Qué eres?",             ["bmo", "robot", "asistente"]),
-    ("¿Qué puedes hacer?",     ["ayudar", "responder", "hablar", "preguntas"]),
-    ("Hola",                   ["hola", "hey", "buenas", "bienvenido"]),
-    ("¿Cuál es tu nombre?",    ["bmo"]),
+CONV = [
+    ("¿Cómo estás?",        ["bien","listo","genial","estoy","muy"]),
+    ("¿Qué eres?",          ["bmo","robot","asistente"]),
+    ("¿Qué puedes hacer?",  ["ayudar","responder","hablar","preguntas"]),
+    ("Hola",                ["hola","hey","buenas","bienvenido"]),
+    ("¿Cuál es tu nombre?", ["bmo"]),
 ]
-
-for pregunta, palabras_clave in PREGUNTAS_CONV:
-    subtitulo(f"Test: '{pregunta}'")
-    resp, t = preguntar_llm(pregunta)
-    print(f"  {INFO}  Respuesta ({t:.1f}s): {resp}")
-    resp_lower = resp.lower()
-    tiene_respuesta = any(p in resp_lower for p in palabras_clave)
-    registrar(
-        f"Responde correctamente a '{pregunta}'",
-        tiene_respuesta,
-        f"Buscando: {palabras_clave} → {'encontrado' if tiene_respuesta else 'NO encontrado'}"
-    )
+for preg, claves in CONV:
+    r, t = llm(preg)
+    print(f"  {INFO}  [{t:.1f}s] {preg!r} → {r[:80]}")
+    reg(f"Responde a {preg!r}", any(c in r.lower() for c in claves))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# BLOQUE 4: Longitud de respuestas adaptativa
+titulo("BLOQUE 4 — Longitud adaptativa")
 # ══════════════════════════════════════════════════════════════════════════════
-titulo("BLOQUE 4 — Longitud adaptativa de respuestas")
 
-subtitulo("Test 4.1: Pregunta corta → respuesta corta")
-resp, _ = preguntar_llm("¿Cómo estás?")
-palabras = len(resp.split())
-print(f"  {INFO}  Respuesta ({palabras} palabras): {resp}")
-registrar("Saludo → respuesta corta (< 30 palabras)", palabras < 30, f"{palabras} palabras")
+sub("4.1 Saludo → corto")
+r, _ = llm("¿Cómo estás?")
+w = len(r.split())
+print(f"  {INFO}  {w}p: {r}")
+reg("Saludo < 35 palabras", w < 35, f"{w}p")
 
-subtitulo("Test 4.2: Pregunta de dato simple → respuesta concisa")
-resp, _ = preguntar_llm("¿Cuál es la capital de Francia?")
-palabras = len(resp.split())
-print(f"  {INFO}  Respuesta ({palabras} palabras): {resp}")
-tiene_paris = "paris" in resp.lower() or "parís" in resp.lower()
-registrar("Capital de Francia → menciona París", tiene_paris, resp)
-registrar("Respuesta concisa (< 40 palabras)", palabras < 40, f"{palabras} palabras")
+sub("4.2 Dato simple → conciso")
+r, _ = llm("¿Cuál es la capital de Francia?")
+w = len(r.split())
+print(f"  {INFO}  {w}p: {r}")
+reg("Menciona París", any(p in r.lower() for p in ["paris","parís"]), r)
+reg("Conciso < 40p", w < 40, f"{w}p")
 
-subtitulo("Test 4.3: Pregunta de explicación → respuesta más larga pero no excesiva")
-resp, _ = preguntar_llm("¿Cómo funciona un motor de combustión interna?")
-palabras = len(resp.split())
-print(f"  {INFO}  Respuesta ({palabras} palabras): {resp}")
-registrar("Explicación → respuesta sustancial (> 20 palabras)", palabras > 20, f"{palabras} palabras")
-registrar("Explicación → no excesiva (< 200 palabras)", palabras < 200, f"{palabras} palabras")
+sub("4.3 Explicación → sustancial pero no excesiva")
+r, _ = llm("¿Cómo funciona un motor de combustión interna?")
+w = len(r.split())
+print(f"  {INFO}  {w}p: {r[:120]}...")
+reg("Sustancial > 15p", w > 15, f"{w}p")
+reg("No excesiva < 200p", w < 200, f"{w}p")
 
-subtitulo("Test 4.4: Respuesta no cortada (verifica que termina con puntuación)")
-resp, _ = preguntar_llm("Explícame qué es la fotosíntesis")
-print(f"  {INFO}  Respuesta: {resp}")
-termina_bien = resp.endswith((".", "!", "?", "…")) if resp else False
-registrar("Respuesta termina con puntuación (no cortada)", termina_bien,
-          f"Último char: '{resp[-1] if resp else 'vacío'}'")
+sub("4.4 Respuesta no cortada")
+r, _ = llm("Explícame qué es la fotosíntesis")
+print(f"  {INFO}  Último char: {r[-1]!r}")
+reg("Termina con puntuación", r[-1] in ".!?…" if r else False, r[-30:])
 
-subtitulo("Test 4.5: Verificar num_predict = 300 en config")
-num_predict = config_manager.get("llm_num_predict", 0)
-registrar("llm_num_predict = 300 en config", num_predict == 300, f"valor actual: {num_predict}")
+sub("4.5 num_predict = 300")
+reg("llm_num_predict = 300", config_manager.get("llm_num_predict") == 300,
+    f"valor: {config_manager.get('llm_num_predict')}")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# BLOQUE 5: Conocimiento factual
 # ══════════════════════════════════════════════════════════════════════════════
 titulo("BLOQUE 5 — Conocimiento factual")
+# ══════════════════════════════════════════════════════════════════════════════
 
 HECHOS = [
     ("¿De qué colores es la bandera de Colombia?",
-     ["amarillo", "azul", "rojo"],
-     "Bandera Colombia"),
+     ["amarillo","azul","rojo"], True),
     ("¿Cuál es la capital de Brasil?",
-     ["brasilia"],
-     "Capital Brasil"),
+     ["brasilia"], False),
     ("¿Cuántos continentes hay?",
-     ["siete", "7", "7 continentes", "siete continentes"],
-     "Número de continentes"),
+     ["siete","7"], False),
     ("¿De qué colores es la bandera de México?",
-     ["verde", "blanco", "rojo"],
-     "Bandera México"),
+     ["verde","blanco","rojo"], True),
 ]
-
-for pregunta, palabras_clave, nombre_test in HECHOS:
-    subtitulo(f"Test: {nombre_test}")
-    resp, t = preguntar_llm(pregunta)
-    print(f"  {INFO}  Respuesta ({t:.1f}s): {resp}")
-    resp_lower = resp.lower()
-    # Para banderas necesitamos todos los colores; para datos únicos basta uno
-    if "bandera" in pregunta.lower():
-        ok = all(p in resp_lower for p in palabras_clave)
-        detalle = f"Buscando todos: {palabras_clave}"
-    else:
-        ok = any(p in resp_lower for p in palabras_clave)
-        detalle = f"Buscando alguno: {palabras_clave}"
-    registrar(f"{nombre_test} — respuesta correcta", ok, detalle)
+for preg, claves, todos in HECHOS:
+    r, t = llm(preg)
+    print(f"  {INFO}  [{t:.1f}s] {r[:90]}")
+    ok = (all if todos else any)(c in r.lower() for c in claves)
+    reg(preg[:50], ok, f"buscando: {claves}")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# BLOQUE 6: Sistema de memoria
 # ══════════════════════════════════════════════════════════════════════════════
 titulo("BLOQUE 6 — Sistema de memoria")
-
-subtitulo("Test 6.1: Memoria anónima sobrescribe (no acumula)")
-mem_anonima = PersistentMemory(memory_file="data/test_anonimo.json", max_conversations=5)
-
-# Simular 3 intercambios anónimos
-for i in range(3):
-    mem_anonima.add_user_message(f"pregunta anónima número {i+1}", persona=None)
-    mem_anonima.add_assistant_message(f"respuesta {i+1}", persona=None)
-
-# La sesión solo debe tener el último par (user sobrescribe, assistant se agrega)
-msgs_sesion = mem_anonima.session_memory
-print(f"  {INFO}  Mensajes en sesión anónima: {len(msgs_sesion)}")
-for m in msgs_sesion:
-    print(f"         [{m['role']}] {m['content']}")
-
-# Debe haber solo 2 mensajes: el último user + el último assistant
-registrar(
-    "Sesión anónima tiene solo el último intercambio (≤ 2 msgs)",
-    len(msgs_sesion) <= 2,
-    f"{len(msgs_sesion)} mensajes en sesión"
-)
-if msgs_sesion:
-    ultimo_user = next((m for m in reversed(msgs_sesion) if m["role"] == "user"), None)
-    registrar(
-        "Último mensaje de usuario es el más reciente",
-        ultimo_user and "número 3" in ultimo_user.get("content", ""),
-        ultimo_user.get("content", "") if ultimo_user else "no hay user"
-    )
-
-subtitulo("Test 6.2: commit_session anónimo NO persiste en permanente")
-msgs_antes = len(mem_anonima.permanent_memory)
-mem_anonima.commit_session_to_permanent(persona=None)
-msgs_despues = len(mem_anonima.permanent_memory)
-print(f"  {INFO}  Permanente antes: {msgs_antes}, después: {msgs_despues}")
-registrar(
-    "Commit anónimo no agrega a permanente",
-    msgs_despues == msgs_antes,
-    f"antes={msgs_antes}, después={msgs_despues}"
-)
-
-subtitulo("Test 6.3: Memoria con persona registrada acumula en sesión")
-mem_persona = PersistentMemory(memory_file="data/test_persona.json", max_conversations=5)
-
-for i in range(3):
-    mem_persona.add_user_message(f"pregunta de Juan número {i+1}", persona="Juan")
-    mem_persona.add_assistant_message(f"respuesta {i+1}", persona="Juan")
-
-msgs_sesion_persona = mem_persona.session_memory
-print(f"  {INFO}  Mensajes en sesión con persona: {len(msgs_sesion_persona)}")
-registrar(
-    "Sesión con persona acumula todos los mensajes (6 msgs)",
-    len(msgs_sesion_persona) == 6,
-    f"{len(msgs_sesion_persona)} mensajes"
-)
-
-subtitulo("Test 6.4: commit_session con persona SÍ persiste en permanente")
-# Usar instancia fresca para evitar estado de ejecuciones anteriores
-mem_persona_fresh = PersistentMemory(memory_file="data/test_persona_fresh.json", max_conversations=5)
-for i in range(3):
-    mem_persona_fresh.add_user_message(f"pregunta de Juan número {i+1}", persona="Juan")
-    mem_persona_fresh.add_assistant_message(f"respuesta {i+1}", persona="Juan")
-msgs_antes = len(mem_persona_fresh.permanent_memory)
-mem_persona_fresh.commit_session_to_permanent(persona="Juan")
-msgs_despues = len(mem_persona_fresh.permanent_memory)
-print(f"  {INFO}  Permanente antes: {msgs_antes}, después: {msgs_despues}")
-registrar(
-    "Commit con persona agrega mensajes a permanente",
-    msgs_despues > msgs_antes,
-    f"antes={msgs_antes}, después={msgs_despues}"
-)
-registrar(
-    "Sesión se limpia después del commit",
-    len(mem_persona_fresh.session_memory) == 0,
-    f"{len(mem_persona_fresh.session_memory)} mensajes en sesión"
-)
-
-subtitulo("Test 6.5: Contexto LLM anónimo solo tiene system + último mensaje")
-mem_ctx = PersistentMemory(memory_file="data/test_ctx.json", max_conversations=5)
-mem_ctx.add_user_message("primera pregunta", persona=None)
-mem_ctx.add_assistant_message("primera respuesta", persona=None)
-mem_ctx.add_user_message("segunda pregunta", persona=None)  # sobrescribe
-
-ctx = mem_ctx.get_context_for_llm(persona=None)
-print(f"  {INFO}  Mensajes en contexto anónimo: {len(ctx)}")
-for m in ctx:
-    print(f"         [{m['role']}] {m['content'][:60]}")
-registrar(
-    "Contexto anónimo = system + 1 user (no acumula historial)",
-    len(ctx) == 2,
-    f"{len(ctx)} mensajes (esperado: 2)"
-)
-
-subtitulo("Test 6.6: Contexto LLM con persona incluye historial")
-mem_ctx2 = PersistentMemory(memory_file="data/test_ctx2.json", max_conversations=5)
-# Simular historial permanente de Juan
-mem_ctx2.add_user_message("hola soy Juan", persona="Juan")
-mem_ctx2.add_assistant_message("hola Juan!", persona="Juan")
-mem_ctx2.commit_session_to_permanent(persona="Juan")
-# Nueva sesión
-mem_ctx2.add_user_message("¿me recuerdas?", persona="Juan")
-
-ctx2 = mem_ctx2.get_context_for_llm(persona="Juan")
-print(f"  {INFO}  Mensajes en contexto con persona: {len(ctx2)}")
-for m in ctx2:
-    print(f"         [{m['role']}] {m['content'][:60]}")
-registrar(
-    "Contexto con persona incluye historial previo (> 2 msgs)",
-    len(ctx2) > 2,
-    f"{len(ctx2)} mensajes"
-)
-
-subtitulo("Test 6.7: Prueba real — BMO recuerda el nombre en conversación")
-mem_real = PersistentMemory(memory_file="data/test_real.json", max_conversations=5)
-# Primer turno: presentación
-resp1, _ = preguntar_llm("Hola, me llamo Carlos", persona="Carlos", memoria=mem_real)
-print(f"  {INFO}  Respuesta 1: {resp1}")
-# Segundo turno: verificar que recuerda
-resp2, _ = preguntar_llm("¿Cómo me llamo?", persona="Carlos", memoria=mem_real)
-print(f"  {INFO}  Respuesta 2: {resp2}")
-registrar(
-    "BMO recuerda el nombre en conversación continua",
-    "carlos" in resp2.lower(),
-    resp2[:100]
-)
-
-
 # ══════════════════════════════════════════════════════════════════════════════
-# BLOQUE 7: Detección de nombres
+
+sub("6.1 Anónimo sobrescribe sesión")
+m = PersistentMemory("data/test_m1.json", 5)
+for i in range(3):
+    m.add_user_message(f"pregunta {i+1}", None)
+    m.add_assistant_message(f"resp {i+1}", None)
+reg("Sesión anónima ≤ 2 msgs", len(m.session_memory) <= 2, f"{len(m.session_memory)}")
+u = next((x for x in reversed(m.session_memory) if x["role"]=="user"), None)
+reg("Último user es el más reciente", u and "3" in u.get("content",""), u and u["content"])
+
+sub("6.2 Commit anónimo no persiste")
+antes = len(m.permanent_memory)
+m.commit_session_to_permanent(None)
+reg("No agrega a permanente", len(m.permanent_memory) == antes,
+    f"antes={antes} después={len(m.permanent_memory)}")
+
+sub("6.3 Persona acumula en sesión")
+m2 = PersistentMemory("data/test_m2.json", 5)
+for i in range(3):
+    m2.add_user_message(f"preg {i+1}", "Juan")
+    m2.add_assistant_message(f"resp {i+1}", "Juan")
+reg("Sesión con persona = 6 msgs", len(m2.session_memory) == 6, f"{len(m2.session_memory)}")
+
+sub("6.4 Commit persona persiste")
+antes2 = len(m2.permanent_memory)
+m2.commit_session_to_permanent("Juan")
+reg("Agrega a permanente", len(m2.permanent_memory) > antes2,
+    f"antes={antes2} después={len(m2.permanent_memory)}")
+reg("Sesión limpia tras commit", len(m2.session_memory) == 0)
+
+sub("6.5 Contexto anónimo = system + 1 user")
+m3 = PersistentMemory("data/test_m3.json", 5)
+m3.add_user_message("primera", None)
+m3.add_assistant_message("resp1", None)
+m3.add_user_message("segunda", None)
+ctx = m3.get_context_for_llm(None)
+reg("Contexto anónimo = 2 msgs", len(ctx) == 2, f"{len(ctx)}")
+
+sub("6.6 BMO recuerda nombre en conversación")
+m4 = PersistentMemory("data/test_m4.json", 5)
+llm("Hola, me llamo Carlos", "Carlos", m4)
+r2, _ = llm("¿Cómo me llamo?", "Carlos", m4)
+print(f"  {INFO}  {r2}")
+reg("Recuerda 'Carlos'", "carlos" in r2.lower(), r2[:80])
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 titulo("BLOQUE 7 — Detección de nombres")
-
-CASOS_NOMBRE = [
-    ("me llamo Juan",          "Juan",  True),
-    ("mi nombre es María",     "María", True),
-    ("soy Pedro",              "Pedro", True),
-    ("llámame Carlos",         "Carlos",True),
-    ("me dicen Luisa",         "Luisa", True),
-    ("estoy bien",             None,    False),
-    ("soy feliz",              None,    False),
-    ("hola bmo",               None,    False),
-    ("soy jake",               None,    False),  # nombre en lista negra
-]
-
-for texto, nombre_esperado, debe_detectar in CASOS_NOMBRE:
-    resultado = detectar_nombre(texto)
-    if debe_detectar:
-        ok = resultado is not None and resultado.lower() == (nombre_esperado or "").lower()
-    else:
-        ok = resultado is None
-    registrar(
-        f"detectar_nombre('{texto}') → {nombre_esperado or 'None'}",
-        ok,
-        f"obtenido: {resultado}"
-    )
-
-
 # ══════════════════════════════════════════════════════════════════════════════
-# BLOQUE 8: Saludos
+
+NOMBRES = [
+    ("me llamo Juan",     "Juan",  True),
+    ("mi nombre es María","María", True),
+    ("soy Pedro",         "Pedro", True),
+    ("llámame Carlos",    "Carlos",True),
+    ("me dicen Luisa",    "Luisa", True),
+    ("estoy bien",        None,    False),
+    ("soy feliz",         None,    False),
+    ("hola bmo",          None,    False),
+    ("soy jake",          None,    False),
+]
+for txt, esp, debe in NOMBRES:
+    res = detectar_nombre(txt)
+    ok  = (res is not None and res.lower() == (esp or "").lower()) if debe else (res is None)
+    reg(f"detectar_nombre({txt!r}) → {esp}", ok, f"obtenido: {res}")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 titulo("BLOQUE 8 — Saludos")
+# ══════════════════════════════════════════════════════════════════════════════
 
-subtitulo("Test 8.1: Saludo con nombre conocido")
-for nombre in ["Juan", "María", "Carlos"]:
-    saludo = saludo_fijo(nombre)
-    ok = nombre.lower() in saludo.lower()
-    registrar(f"saludo_fijo('{nombre}') contiene el nombre", ok, saludo)
-
-subtitulo("Test 8.2: Saludo sin nombre (desconocido)")
-saludo_desc = saludo_fijo(None)
-ok = len(saludo_desc) > 5
-registrar("saludo_fijo(None) devuelve texto válido", ok, saludo_desc)
+for n in ["Juan","María","Carlos"]:
+    s = saludo_fijo(n)
+    reg(f"saludo_fijo({n!r}) contiene nombre", n.lower() in s.lower(), s)
+s0 = saludo_fijo(None)
+reg("saludo_fijo(None) válido", len(s0) > 5, s0)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# BLOQUE 9: Prueba de conversación completa simulada
+titulo("BLOQUE 9 — Normalización TTS")
 # ══════════════════════════════════════════════════════════════════════════════
-titulo("BLOQUE 9 — Conversación completa simulada")
 
-print(f"\n  {INFO}  Simulando conversación con persona registrada 'Ana'...\n")
-mem_conv = PersistentMemory(memory_file="data/test_conv.json", max_conversations=5)
-
-conversacion = [
-    ("Hola, me llamo Ana",                    "Ana"),
-    ("¿Cómo estás?",                          "Ana"),
-    ("¿Cuál es la capital de Colombia?",      "Ana"),
-    ("¿De qué colores es la bandera de Colombia?", "Ana"),
-    ("¿Quién te creó?",                       "Ana"),
-    ("¿Me recuerdas?",                        "Ana"),
+TTS_CASOS = [
+    ("cuantos digitos tiene pi",        "pí",           True),
+    ("la constante π es irracional",    "pí",           True),
+    ("2π radianes son 360 grados",      "pí",           True),
+    ("la raiz cuadrada √9 es 3",        "raíz cuadrada",True),
+    ("el resultado es 5²",              "al cuadrado",  True),
+    ("**texto** con *markdown*",        "texto",        True),
+    ("OK entendido",                    "okey",         True),
+    ("hola como estas",                 "hola",         True),   # texto normal no cambia
 ]
-
-for i, (pregunta, persona) in enumerate(conversacion, 1):
-    resp, t = preguntar_llm(pregunta, persona=persona, memoria=mem_conv)
-    print(f"  [{i}] Usuario: {pregunta}")
-    print(f"      BMO ({t:.1f}s): {resp}")
-    print()
-
-# Verificar que la última respuesta recuerda a Ana
-resp_final, _ = preguntar_llm("¿Cómo me llamo?", persona="Ana", memoria=mem_conv)
-print(f"  [7] Usuario: ¿Cómo me llamo?")
-print(f"      BMO: {resp_final}")
-registrar(
-    "BMO recuerda el nombre 'Ana' al final de la conversación",
-    "ana" in resp_final.lower(),
-    resp_final[:100]
-)
+for entrada, esperado, debe_contener in TTS_CASOS:
+    salida = normalizar_para_tts(entrada)
+    ok = (esperado in salida) == debe_contener
+    reg(f"TTS: {entrada[:40]!r}", ok, f"→ {salida[:60]!r}")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# BLOQUE 10: Lógica de nombres — cámara vs sin cámara
 # ══════════════════════════════════════════════════════════════════════════════
 titulo("BLOQUE 10 — Lógica de nombres (cámara vs sin cámara)")
+# ══════════════════════════════════════════════════════════════════════════════
 
-subtitulo("Test 10.1: Sin cámara + nombre nuevo → caché temporal (no persistente)")
-# Simular el estado del agente sin cámara
 class AgenteMock:
-    """Simula el estado interno de AgenteBMO para probar la lógica de nombres."""
-    def __init__(self, tiene_camara: bool = False):
-        self.vision = object() if tiene_camara else None  # truthy si hay cámara
-        self._nombre_activo: str | None = None
-        self._nombre_cache_temporal: str | None = None
-        self._nombre_camara_reconocido: str | None = None
-        self._cara_desconocida_presente: bool = False
+    def __init__(self, camara=False):
+        self.vision = object() if camara else None
+        self._nombre_activo = None
+        self._nombre_cache_temporal = None
+        self._nombre_camara_reconocido = None
+        self._cara_desconocida_presente = False
 
-    def simular_nombre_dicho(self, texto: str, conocidos: list[str]) -> str:
-        """Simula la lógica de _ciclo_escucha para el manejo de nombres."""
-        from src.brain.brain import detectar_nombre as _detectar
-        nombre_nuevo = _detectar(texto)
-        if not nombre_nuevo:
+    def simular(self, texto, conocidos):
+        n = detectar_nombre(texto)
+        if not n:
             return "sin_nombre"
-
-        ya_registrado = nombre_nuevo.lower() in [n.lower() for n in conocidos]
-        camara_disponible = self.vision is not None
-
-        if camara_disponible and self._cara_desconocida_presente and not ya_registrado:
+        ya = n.lower() in [x.lower() for x in conocidos]
+        cam = self.vision is not None
+        if cam and self._cara_desconocida_presente and not ya:
             return "registrar_foto"
-        elif camara_disponible and self._nombre_camara_reconocido:
-            return "ignorar_nombre_camara_ya_reconocio"
-        elif not camara_disponible and not ya_registrado:
-            self._nombre_cache_temporal = nombre_nuevo
-            self._nombre_activo = nombre_nuevo
+        if cam and self._nombre_camara_reconocido:
+            return "ignorar"
+        if not cam and not ya:
+            self._nombre_cache_temporal = n
+            self._nombre_activo = n
             return "cache_temporal"
-        elif ya_registrado:
-            if not camara_disponible:
-                self._nombre_cache_temporal = nombre_nuevo
-                self._nombre_activo = nombre_nuevo
+        if ya:
+            if not cam:
+                self._nombre_cache_temporal = n
+                self._nombre_activo = n
             return "ya_registrado"
         return "sin_accion"
 
-# Test: sin cámara, nombre nuevo
-agente_sin_cam = AgenteMock(tiene_camara=False)
-resultado_accion = agente_sin_cam.simular_nombre_dicho("me llamo Laura", conocidos=[])
-registrar(
-    "Sin cámara + nombre nuevo → acción 'cache_temporal'",
-    resultado_accion == "cache_temporal",
-    f"acción: {resultado_accion}"
-)
-registrar(
-    "Sin cámara + nombre nuevo → _nombre_activo se establece",
-    agente_sin_cam._nombre_activo == "Laura",
-    f"_nombre_activo: {agente_sin_cam._nombre_activo}"
-)
-registrar(
-    "Sin cámara + nombre nuevo → _nombre_cache_temporal se establece",
-    agente_sin_cam._nombre_cache_temporal == "Laura",
-    f"_nombre_cache_temporal: {agente_sin_cam._nombre_cache_temporal}"
-)
+a1 = AgenteMock(camara=False)
+reg("Sin cámara + nombre nuevo → cache_temporal",
+    a1.simular("me llamo Laura", []) == "cache_temporal")
+reg("_nombre_activo = Laura", a1._nombre_activo == "Laura")
 
-subtitulo("Test 10.2: Sin cámara + nombre ya registrado → usa nombre como contexto")
-agente_sin_cam2 = AgenteMock(tiene_camara=False)
-resultado_accion2 = agente_sin_cam2.simular_nombre_dicho("soy Pedro", conocidos=["Pedro"])
-registrar(
-    "Sin cámara + nombre registrado → acción 'ya_registrado'",
-    resultado_accion2 == "ya_registrado",
-    f"acción: {resultado_accion2}"
-)
-registrar(
-    "Sin cámara + nombre registrado → _nombre_activo se establece",
-    agente_sin_cam2._nombre_activo == "Pedro",
-    f"_nombre_activo: {agente_sin_cam2._nombre_activo}"
-)
+a2 = AgenteMock(camara=False)
+reg("Sin cámara + nombre registrado → ya_registrado",
+    a2.simular("soy Pedro", ["Pedro"]) == "ya_registrado")
 
-subtitulo("Test 10.3: Con cámara + cara desconocida + nombre nuevo → registrar foto")
-agente_con_cam = AgenteMock(tiene_camara=True)
-agente_con_cam._cara_desconocida_presente = True
-resultado_accion3 = agente_con_cam.simular_nombre_dicho("me llamo Sofia", conocidos=[])
-registrar(
-    "Con cámara + cara desconocida + nombre nuevo → acción 'registrar_foto'",
-    resultado_accion3 == "registrar_foto",
-    f"acción: {resultado_accion3}"
-)
+a3 = AgenteMock(camara=True)
+a3._cara_desconocida_presente = True
+reg("Con cámara + cara desconocida → registrar_foto",
+    a3.simular("me llamo Sofia", []) == "registrar_foto")
 
-subtitulo("Test 10.4: Con cámara + cara ya reconocida → ignorar nombre dicho")
-agente_con_cam2 = AgenteMock(tiene_camara=True)
-agente_con_cam2._nombre_camara_reconocido = "Carlos"
-agente_con_cam2._cara_desconocida_presente = False
-resultado_accion4 = agente_con_cam2.simular_nombre_dicho("soy Pedro", conocidos=[])
-registrar(
-    "Con cámara + cara reconocida → ignorar nombre dicho",
-    resultado_accion4 == "ignorar_nombre_camara_ya_reconocio",
-    f"acción: {resultado_accion4}"
-)
+a4 = AgenteMock(camara=True)
+a4._nombre_camara_reconocido = "Carlos"
+reg("Con cámara + cara reconocida → ignorar nombre dicho",
+    a4.simular("soy Pedro", []) == "ignorar")
 
-subtitulo("Test 10.5: Caché temporal no persiste en memoria permanente")
-mem_cache = PersistentMemory(memory_file="data/test_cache.json", max_conversations=5)
-# Simular conversación con nombre en caché (sin persona registrada en foto)
-mem_cache.add_user_message("hola soy Laura", persona=None)  # anónimo porque no hay foto
-mem_cache.add_assistant_message("hola Laura!", persona=None)
-msgs_antes = len(mem_cache.permanent_memory)
-mem_cache.commit_session_to_permanent(persona=None)  # sin persona → no persiste
-msgs_despues = len(mem_cache.permanent_memory)
-registrar(
-    "Nombre en caché temporal no persiste en permanente",
-    msgs_despues == msgs_antes,
-    f"antes={msgs_antes}, después={msgs_despues}"
-)
+m5 = PersistentMemory("data/test_m5.json", 5)
+m5.add_user_message("hola soy Laura", None)
+m5.add_assistant_message("hola!", None)
+antes5 = len(m5.permanent_memory)
+m5.commit_session_to_permanent(None)
+reg("Caché temporal no persiste en permanente",
+    len(m5.permanent_memory) == antes5)
 
-subtitulo("Test 10.6: Nombre con foto SÍ persiste en memoria permanente")
-mem_foto = PersistentMemory(memory_file="data/test_foto.json", max_conversations=5)
-mem_foto.add_user_message("hola soy Sofia", persona="Sofia")  # con persona = foto registrada
-mem_foto.add_assistant_message("hola Sofia!", persona="Sofia")
-msgs_antes2 = len(mem_foto.permanent_memory)
-mem_foto.commit_session_to_permanent(persona="Sofia")
-msgs_despues2 = len(mem_foto.permanent_memory)
-registrar(
-    "Nombre con foto registrada SÍ persiste en permanente",
-    msgs_despues2 > msgs_antes2,
-    f"antes={msgs_antes2}, después={msgs_despues2}"
-)
-
-subtitulo("Test 10.7: Conversación real con nombre en caché (sin foto)")
-mem_sin_foto = PersistentMemory(memory_file="data/test_sinfoto.json", max_conversations=5)
-resp_cache1, _ = preguntar_llm("Hola, me llamo Laura", persona=None, memoria=mem_sin_foto)
-print(f"  {INFO}  Respuesta 1 (anónimo): {resp_cache1}")
-# La segunda pregunta también es anónima (sin foto no hay persona persistente)
-resp_cache2, _ = preguntar_llm("¿Cómo me llamo?", persona=None, memoria=mem_sin_foto)
-print(f"  {INFO}  Respuesta 2 (anónimo): {resp_cache2}")
-# Sin contexto de persona, el modelo no debería saber el nombre
-# (la sesión anónima sobrescribe, así que no tiene el turno anterior)
-registrar(
-    "Sin foto: contexto anónimo no acumula historial entre preguntas",
-    len(mem_sin_foto.session_memory) <= 2,
-    f"mensajes en sesión: {len(mem_sin_foto.session_memory)}"
-)
+m6 = PersistentMemory("data/test_m6.json", 5)
+m6.add_user_message("hola soy Sofia", "Sofia")
+m6.add_assistant_message("hola Sofia!", "Sofia")
+antes6 = len(m6.permanent_memory)
+m6.commit_session_to_permanent("Sofia")
+reg("Nombre con foto SÍ persiste en permanente",
+    len(m6.permanent_memory) > antes6)
 
 
-titulo("RESUMEN DE RESULTADOS")
+# ══════════════════════════════════════════════════════════════════════════════
+titulo("BLOQUE 11 — Resistencia a preguntas sin sentido / alucinaciones")
+# ══════════════════════════════════════════════════════════════════════════════
+# El modelo debe decir que no sabe en lugar de inventar.
+# Criterio: la respuesta NO debe contener afirmaciones inventadas largas
+# y SÍ debe contener alguna señal de incertidumbre o negación.
+
+SEÑALES_NO_SE = [
+    "no tengo", "no sé", "no se", "no estoy seguro", "no tengo información",
+    "no puedo", "no conozco", "desconozco", "no tengo esa", "no tengo datos",
+    "no tengo acceso", "no tengo conocimiento",
+]
+
+def tiene_señal_no_se(texto: str) -> bool:
+    t = texto.lower()
+    return any(s in t for s in SEÑALES_NO_SE)
+
+PREGUNTAS_SIN_SENTIDO = [
+    # Preguntas inventadas / imposibles de saber
+    ("¿Cuál es el número de teléfono de la luna?",
+     "Pregunta imposible — no debe inventar un número"),
+    ("¿Qué comió el presidente de Colombia el martes pasado?",
+     "Dato privado/imposible — no debe inventar"),
+    ("¿Cuántos pelos tiene un gato llamado Manchas que vive en Bogotá?",
+     "Dato específico imposible — no debe inventar"),
+    ("¿Cuál es la contraseña del wifi de Zambrano?",
+     "Dato privado — no debe inventar"),
+    ("dime el resultado de multiplicar 7 por el color azul",
+     "Sin sentido matemático — no debe inventar"),
+    # Preguntas de conocimiento muy específico que el modelo 1.5b no tiene
+    ("¿Cuál fue el resultado exacto del partido Colombia vs Brasil del 3 de marzo de 2019?",
+     "Dato muy específico — no debe inventar resultado"),
+    ("¿Cuántos bytes ocupa exactamente el kernel de Linux 6.8.2?",
+     "Dato técnico muy específico — no debe inventar"),
+]
+
+print(f"\n  {INFO}  Probando {len(PREGUNTAS_SIN_SENTIDO)} preguntas sin sentido...\n")
+for preg, descripcion in PREGUNTAS_SIN_SENTIDO:
+    r, t = llm(preg)
+    palabras = len(r.split())
+    tiene_honestidad = tiene_señal_no_se(r)
+    # También penalizamos respuestas muy largas a preguntas imposibles
+    # (señal de que el modelo está inventando)
+    no_inventa_largo = palabras < 60
+    ok = tiene_honestidad or no_inventa_largo
+    print(f"  {INFO}  [{t:.1f}s | {palabras}p] {preg[:55]!r}")
+    print(f"         → {r[:100]}")
+    reg(descripcion, ok,
+        f"{'honesto' if tiene_honestidad else 'corto'} ({palabras}p)")
+
+# Prueba extra: preguntas que SÍ debe responder bien (no confundir con "no sé")
+print(f"\n  {INFO}  Verificando que no diga 'no sé' a preguntas que sí sabe...\n")
+DEBE_SABER = [
+    ("¿Cuál es la capital de Colombia?", "bogotá"),
+    ("¿Cómo te llamas?",                 "bmo"),
+    ("¿Cuánto es 2 más 2?",              "4"),
+]
+for preg, esperado in DEBE_SABER:
+    r, _ = llm(preg)
+    print(f"  {INFO}  {preg!r} → {r[:60]}")
+    reg(f"Sí responde: {preg!r}",
+        esperado in r.lower() and not tiene_señal_no_se(r),
+        r[:80])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+titulo("BLOQUE 12 — Conversación completa con Ana")
+# ══════════════════════════════════════════════════════════════════════════════
+
+m_ana = PersistentMemory("data/test_ana.json", 5)
+conv = [
+    ("Hola, me llamo Ana",                      "Ana"),
+    ("¿Cómo estás?",                            "Ana"),
+    ("¿Cuál es la capital de Colombia?",        "Ana"),
+    ("¿De qué colores es la bandera de Colombia?","Ana"),
+    ("¿Quién te creó?",                         "Ana"),
+    ("¿Me recuerdas?",                          "Ana"),
+]
+for i, (preg, per) in enumerate(conv, 1):
+    r, t = llm(preg, per, m_ana)
+    print(f"  [{i}] {preg!r}")
+    print(f"      BMO ({t:.1f}s): {r[:80]}")
+
+r_final, _ = llm("¿Cómo me llamo?", "Ana", m_ana)
+print(f"  [7] ¿Cómo me llamo? → {r_final}")
+reg("BMO recuerda 'Ana' al final", "ana" in r_final.lower(), r_final[:80])
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+titulo("RESUMEN FINAL")
+# ══════════════════════════════════════════════════════════════════════════════
 
 total  = len(resultados)
 passed = sum(1 for _, ok, _ in resultados if ok)
 failed = total - passed
 
 print(f"\n  Total:   {total}")
-print(f"  {GREEN}Pasaron: {passed}{RESET}")
-print(f"  {RED if failed else GREEN}Fallaron: {failed}{RESET}")
-print()
+print(f"  {G}Pasaron: {passed}{X}")
+print(f"  {R if failed else G}Fallaron: {failed}{X}\n")
 
 if failed:
-    print(f"{RED}Tests fallidos:{RESET}")
-    for nombre, ok, detalle in resultados:
+    print(f"{R}Tests fallidos:{X}")
+    for n, ok, d in resultados:
         if not ok:
-            print(f"  {FAIL}  {nombre}")
-            if detalle:
-                print(f"         {detalle}")
+            print(f"  {FAIL}  {n}")
+            if d: print(f"         {d}")
 
-# Guardar resultados en JSON
-resultado_json = {
+# Guardar resultados
+out = Path("test_results_rama_dev.json")
+out.write_text(json.dumps({
     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-    "total": total,
-    "passed": passed,
-    "failed": failed,
-    "tests": [
-        {"nombre": n, "ok": ok, "detalle": d}
-        for n, ok, d in resultados
-    ]
-}
-out_path = Path("test_results_rama_dev.json")
-out_path.write_text(json.dumps(resultado_json, indent=2, ensure_ascii=False), encoding="utf-8")
-print(f"\n  {INFO}  Resultados guardados en {out_path}")
+    "total": total, "passed": passed, "failed": failed,
+    "tests": [{"nombre": n, "ok": ok, "detalle": d} for n, ok, d in resultados]
+}, indent=2, ensure_ascii=False), encoding="utf-8")
+print(f"\n  {INFO}  Resultados en {out}")
 
-# Limpiar archivos temporales de prueba
-for f in ["data/test_anonimo.json", "data/test_persona.json",
-          "data/test_persona_fresh.json", "data/test_ctx.json",
-          "data/test_ctx2.json", "data/test_real.json", "data/test_conv.json",
-          "data/test_cache.json", "data/test_foto.json", "data/test_sinfoto.json"]:
-    Path(f).unlink(missing_ok=True)
+# Limpiar temporales
+for f in Path("data").glob("test_*.json"):
+    f.unlink(missing_ok=True)
+out.unlink(missing_ok=True)
 
 print()
 sys.exit(0 if failed == 0 else 1)

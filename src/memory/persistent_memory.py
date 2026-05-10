@@ -62,7 +62,7 @@ class PersistentMemory:
             self._add_system_prompt()
     
     def _add_system_prompt(self):
-        """Agrega el system prompt minimalista — corto para reducir alucinaciones en modelos pequeños."""
+        """Agrega el system prompt minimalista."""
         system_prompt = {
             "role": "system",
             "content": (
@@ -71,7 +71,8 @@ class PersistentMemory:
                 "Responde siempre en español. Sé amable y directo. "
                 "Máximo 2 oraciones para preguntas simples, 4 para explicaciones. "
                 "Sin listas, sin markdown, solo texto natural. "
-                "Si no sabes algo, di 'No tengo esa información'. "
+                "Si no sabes algo o la pregunta no tiene sentido, di exactamente: "
+                "'No tengo esa información.' y no agregues nada más. "
                 "Bandera de Colombia: amarillo arriba, azul medio, rojo abajo. "
                 "Capital de Brasil: Brasilia."
             ),

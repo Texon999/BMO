@@ -11,6 +11,10 @@ data/trainer.yml
 data/history/
 data/names.json
 data/persons.json
+data/test_*.json
+
+# Test results
+test_results*.json
 
 # Voices (large binary files)
 voices/*.onnx

@@ -50,7 +50,8 @@ def get_system_prompt() -> str:
         "Responde siempre en español. Sé amable y directo. "
         "Máximo 2 oraciones para preguntas simples, 4 para explicaciones. "
         "Sin listas, sin markdown, solo texto natural. "
-        "Si no sabes algo, di 'No tengo esa información'. "
+        "Si no sabes algo o la pregunta no tiene sentido, di exactamente: "
+        "'No tengo esa información.' y no agregues nada más. "
         "Bandera de Colombia: amarillo arriba, azul medio, rojo abajo. "
         "Capital de Brasil: Brasilia. "
         "Hora de Aventura: BMO es un personaje de esa serie, un robot que vive con Finn y Jake."
@@ -125,7 +126,7 @@ _TTS_REEMPLAZOS = [
     # La palabra "pi" sola o seguida de número/espacio en contexto matemático
     (re.compile(r"\bpi\b", re.IGNORECASE),      "pí"),
     # Otros símbolos matemáticos comunes
-    (re.compile(r"√"),                          "raíz cuadrada de"),
+    (re.compile(r"√"),                          "raíz cuadrada de "),
     (re.compile(r"∞"),                          "infinito"),
     (re.compile(r"≈"),                          "aproximadamente"),
     (re.compile(r"≠"),                          "distinto de"),
