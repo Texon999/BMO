@@ -363,6 +363,7 @@ class AgenteBMO:
             nombre_reconocido = self._nombre_camara_reconocido
             cara_desconocida  = self._cara_desconocida_presente
             camara_disponible = self.vision is not None
+            hay_cara_en_camara = nombre_reconocido is not None or cara_desconocida
 
         # ── Lógica de nombre ──────────────────────────────────────────────────
         nombre_nuevo = detectar_nombre(texto)
@@ -371,25 +372,56 @@ class AgenteBMO:
             conocidos     = list(nombres_a_ids().values())
             ya_registrado = nombre_nuevo.lower() in [n.lower() for n in conocidos]
 
-            if camara_disponible and cara_desconocida and not ya_registrado:
-                log.info(f"[NOMBRE] Cara desconocida dijo '{nombre_nuevo}' → registrando foto")
-                self._registrar_persona(nombre_nuevo)
-                return
-            elif camara_disponible and nombre_reconocido:
-                log.info(f"[NOMBRE] Cámara ya reconoció a '{nombre_reconocido}', ignorando '{nombre_nuevo}'")
-            elif not camara_disponible and not ya_registrado:
-                self._nombre_cache_temporal = nombre_nuevo
-                self._nombre_activo = nombre_nuevo
-                log.info(f"[NOMBRE] Sin cámara → nombre en caché temporal: '{nombre_nuevo}'")
+            if ya_registrado:
+                # Ya lo conocemos — no registrar de nuevo, solo confirmar
+                log.info("[NOMBRE] '%s' ya está registrado", nombre_nuevo)
                 self.display.set_estado(Estado.SPEAKING)
-                self.voz.hablar(f"Hola {nombre_nuevo}! Te recuerdo mientras hablamos, pero sin cámara no puedo guardar tu cara.")
+                self.voz.hablar(f"Ya te conozco, {nombre_nuevo}! Encantado de verte.")
                 self.display.set_estado(Estado.IDLE)
+                # Si la cámara no lo reconoció aún, usar como caché temporal
+                if not nombre_reconocido:
+                    with self._lock_camara:
+                        self._nombre_cache_temporal = nombre_nuevo
+                        self._nombre_activo = nombre_nuevo
                 return
-            elif ya_registrado:
-                log.info(f"[NOMBRE] '{nombre_nuevo}' ya está registrado")
-                if not camara_disponible:
+
+            # Nombre nuevo — intentar registrar
+            if not camara_disponible:
+                # Sin cámara: guardar en caché temporal
+                with self._lock_camara:
                     self._nombre_cache_temporal = nombre_nuevo
                     self._nombre_activo = nombre_nuevo
+                log.info("[NOMBRE] Sin cámara → caché temporal: '%s'", nombre_nuevo)
+                self.display.set_estado(Estado.SPEAKING)
+                self.voz.hablar(
+                    f"Hola {nombre_nuevo}! Te recuerdo mientras hablamos, "
+                    "pero sin cámara no puedo guardar tu cara."
+                )
+                self.display.set_estado(Estado.IDLE)
+                return
+
+            if not hay_cara_en_camara:
+                # Cámara disponible pero no ve ninguna cara
+                log.info("[NOMBRE] '%s' quiere registrarse pero no hay cara en cámara", nombre_nuevo)
+                self.display.set_estado(Estado.SPEAKING)
+                self.voz.hablar(
+                    f"Hola {nombre_nuevo}! Acércate a la cámara para que pueda verte bien."
+                )
+                self.display.set_estado(Estado.IDLE)
+                return
+
+            if nombre_reconocido:
+                # La cámara ya reconoció a alguien — no registrar con otro nombre
+                log.info(
+                    "[NOMBRE] Cámara reconoció a '%s', ignorando nombre dicho '%s'",
+                    nombre_reconocido, nombre_nuevo,
+                )
+                # Continuar con el nombre reconocido por cámara
+            else:
+                # Cara desconocida frente a la cámara + nombre nuevo → registrar
+                log.info("[NOMBRE] Cara desconocida dijo '%s' → registrando foto", nombre_nuevo)
+                self._registrar_persona(nombre_nuevo)
+                return
 
         # Nombre activo para el LLM
         with self._lock_camara:

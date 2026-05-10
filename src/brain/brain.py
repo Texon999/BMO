@@ -92,10 +92,15 @@ def saludo_fijo(nombre: str | None) -> str:
 _NOMBRE_PATRONES = [
     r"me llamo (\w+)",
     r"mi nombre es (\w+)",
-    r"llámame (\w+)",
+    r"ll[aá]mame (\w+)",
     r"me dicen (\w+)",
     r"me puedes llamar (\w+)",
+    r"puedes llamarme (\w+)",
     r"soy (\w+)",
+    r"me llaman (\w+)",
+    r"registr[aá](?:me)? como (\w+)",
+    r"gu[aá]rda(?:me)? como (\w+)",
+    r"recu[eé]rda(?:me)? como (\w+)",
 ]
 
 _NO_NOMBRES = {
