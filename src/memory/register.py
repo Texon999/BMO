@@ -262,20 +262,3 @@ def obtener_contexto_anonimo() -> str:
     return "Conversación reciente (sin nombre): " + " / ".join(lineas)
 
 
-# ── Compatibilidad con brain.py ───────────────────────────────────────────────
-
-def historial_para_llm() -> list:
-    """
-    Ya no se usa historial global.
-    Devuelve lista vacía — el contexto se inyecta via system prompt en brain.py.
-    """
-    return []
-
-
-def agregar_mensaje(role: str, content: str):
-    """Stub de compatibilidad — no hace nada, reemplazado por agregar_turno_persona."""
-    pass
-
-
-def limpiar_historial():
-    pass

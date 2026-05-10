@@ -1,31 +1,5 @@
 """
-Cerebro de BMO — Sistema de IA Robusto y Persistente
-
-FILOSOFÍA DE DISEÑO:
-- BMO es un asistente de IA amigable que puede responder cualquier pregunta
-- SOLO menciona Hora de Aventura cuando le preguntan específicamente sobre la serie
-- No mezcla contextos innecesariamente
-- Respuestas cortas y directas (1-2 oraciones máximo)
-- Velocidad sobre complejidad
-
-ARQUITECTURA MEJORADA (basada en be-more-agent):
-1. **Configuración Centralizada** → JSON dinámico con hot-reload
-2. **Memoria Persistente** → Sistema permanente + sesión con límites automáticos
-3. **Audio Robusto** → Auto-detección de dispositivos y fallbacks
-4. **Streaming Optimizado** → Habla mientras genera con manejo de errores
-5. **Recuperación Automática** → Graceful shutdown y cleanup de recursos
-
-CARACTERÍSTICAS DE PERSISTENCIA:
-- Memoria permanente limitada a últimas 10 conversaciones
-- Configuración hot-reload sin reiniciar
-- Manejo robusto de errores de audio ALSA
-- Guardado automático al salir
-- Fallbacks automáticos para compatibilidad
-
-PARÁMETROS OPTIMIZADOS:
-- Configuración centralizada en config.json
-- Valores por defecto seguros con validación
-- Migración automática de configuraciones legacy
+Cerebro de BMO — Generación de respuestas con LLM y pipeline TTS.
 """
 import logging
 import re
@@ -39,65 +13,55 @@ from typing import Callable
 from src.config.config_manager import config_manager
 from src.memory.persistent_memory import persistent_memory
 
-# Imports legacy para compatibilidad
-from src.memory.register import (
-    obtener_contexto_persona, agregar_turno_persona, agregar_turno_anonimo,
-    obtener_contexto_anonimo,
-)
-
 log = logging.getLogger("BMO")
 
-# Configuración dinámica
-MODEL = config_manager.get("text_model", "qwen2.5:1.5b")
+# ── Shutdown ──────────────────────────────────────────────────────────────────
 
-# Sistema de shutdown robusto
-_shutdown_handlers = []
+_shutdown_handlers: list = []
 _shutdown_registered = False
 
+
 def register_shutdown_handler(handler):
-    """Registra un handler para shutdown limpio"""
     global _shutdown_registered
     _shutdown_handlers.append(handler)
-    
     if not _shutdown_registered:
         atexit.register(_execute_shutdown_handlers)
         _shutdown_registered = True
 
+
 def _execute_shutdown_handlers():
-    """Ejecuta todos los handlers de shutdown"""
-    log.info("[SHUTDOWN] Executing cleanup handlers...")
     for handler in _shutdown_handlers:
         try:
             handler()
         except Exception as e:
-            log.warning(f"[SHUTDOWN] Handler failed: {e}")
+            log.warning("[SHUTDOWN] Handler falló: %s", e)
 
-# System prompt dinámico con contexto
+
+# ── System prompt ─────────────────────────────────────────────────────────────
+
 def get_system_prompt() -> str:
     """
-    System prompt minimalista para qwen2.5:1.5b.
-    Regla: cuanto más corto, menos alucina el modelo.
-    Solo lo esencial: identidad, idioma, longitud y datos críticos.
+    Prompt minimalista para qwen2.5:1.5b.
+    Cuanto más corto, menos alucina el modelo.
     """
-    base_prompt = (
+    base = (
         "Eres BMO, un robot asistente creado por Zambrano, "
         "un joven programador del SENA apasionado por la tecnología. "
         "Responde siempre en español. Sé amable y directo. "
-        "Respuestas cortas: máximo 2 oraciones para preguntas simples, "
-        "máximo 4 oraciones para explicaciones. "
+        "Máximo 2 oraciones para preguntas simples, 4 para explicaciones. "
         "Sin listas, sin markdown, solo texto natural. "
         "Si no sabes algo, di 'No tengo esa información'. "
         "Bandera de Colombia: amarillo arriba, azul medio, rojo abajo. "
         "Capital de Brasil: Brasilia. "
         "Hora de Aventura: BMO es un personaje de esa serie, un robot que vive con Finn y Jake."
     )
-
-    # Extras opcionales desde config (vacío por defecto)
     extras = config_manager.get("system_prompt_extras", "")
     if extras:
-        base_prompt += f" {extras}"
+        base += f" {extras}"
+    return base
 
-    return base_prompt
+
+# ── Saludos ───────────────────────────────────────────────────────────────────
 
 SALUDOS_CONOCIDO = [
     "¡{nombre}! ¡Qué alegría verte de nuevo! ¿Cómo estás?",
@@ -110,10 +74,19 @@ SALUDOS_CONOCIDO = [
 SALUDOS_DESCONOCIDO = [
     "¡Hola! Soy BMO, un robot de IA. ¿Cómo te llamas?",
     "¡Oye, hola! No te conozco todavía. ¿Cuál es tu nombre?",
-    "¡Bienvenido a la feria! Soy BMO. ¿Me dices tu nombre?",
+    "¡Bienvenido! Soy BMO. ¿Me dices tu nombre?",
     "¡Hola! Me llamo BMO y me encanta conocer gente nueva. ¿Y tú?",
     "¡Qué bueno que te acercaste! Soy BMO. ¿Cómo te llamas?",
 ]
+
+
+def saludo_fijo(nombre: str | None) -> str:
+    if nombre:
+        return random.choice(SALUDOS_CONOCIDO).format(nombre=nombre)
+    return random.choice(SALUDOS_DESCONOCIDO)
+
+
+# ── Detección de nombres ──────────────────────────────────────────────────────
 
 _NOMBRE_PATRONES = [
     r"me llamo (\w+)",
@@ -131,36 +104,6 @@ _NO_NOMBRES = {
 }
 
 
-def precargar_modelo():
-    """
-    Precarga el modelo LLM en RAM de forma BLOQUEANTE.
-    Espera hasta que el modelo responda para garantizar que la primera
-    respuesta real sea rápida. Se llama desde el hilo de lógica antes
-    del saludo inicial.
-    """
-    try:
-        model = config_manager.get("text_model", "qwen2.5:1.5b")
-        log.info("[LLM] Precargando %s en RAM (puede tardar ~20s)...", model)
-        t0 = time.time()
-        ollama.generate(model=model, prompt="hola", keep_alive=-1)
-        log.info("[LLM] %s listo en RAM (%.1fs)", model, time.time() - t0)
-    except Exception as e:
-        log.warning("[LLM] Error al precargar: %s — ejecuta: ollama serve", e)
-
-# Alias privado para compatibilidad interna
-_precargar_modelo = precargar_modelo
-
-
-def cleanup_llm():
-    """Limpia recursos del LLM al salir"""
-    try:
-        model = config_manager.get("text_model", "qwen2.5:1.5b")
-        ollama.generate(model=model, prompt="", keep_alive=0)
-        log.info("[LLM] Modelo descargado de RAM")
-    except Exception:
-        pass
-
-
 def detectar_nombre(texto: str) -> str | None:
     t = texto.lower().strip()
     for patron in _NOMBRE_PATRONES:
@@ -172,28 +115,74 @@ def detectar_nombre(texto: str) -> str | None:
     return None
 
 
-def _extraer_oraciones(buffer: str) -> tuple[list[str], str]:
+# ── Normalización de texto para TTS ──────────────────────────────────────────
+# Piper TTS (español) no pronuncia bien ciertos símbolos y palabras en inglés.
+# Esta función los convierte a su equivalente hablado en español antes de sintetizar.
+
+_TTS_REEMPLAZOS = [
+    # Símbolo matemático π → "pí" (con tilde para que Piper lo pronuncie como vocal tónica)
+    (re.compile(r"π"),                          " pí "),
+    # La palabra "pi" sola o seguida de número/espacio en contexto matemático
+    (re.compile(r"\bpi\b", re.IGNORECASE),      "pí"),
+    # Otros símbolos matemáticos comunes
+    (re.compile(r"√"),                          "raíz cuadrada de"),
+    (re.compile(r"∞"),                          "infinito"),
+    (re.compile(r"≈"),                          "aproximadamente"),
+    (re.compile(r"≠"),                          "distinto de"),
+    (re.compile(r"≤"),                          "menor o igual que"),
+    (re.compile(r"≥"),                          "mayor o igual que"),
+    (re.compile(r"²"),                          " al cuadrado"),
+    (re.compile(r"³"),                          " al cubo"),
+    # Siglas y palabras en inglés que Piper pronuncia mal
+    (re.compile(r"\bOK\b"),                     "okey"),
+    (re.compile(r"\bok\b"),                     "okey"),
+    # Limpiar asteriscos y markdown que el LLM a veces genera
+    (re.compile(r"\*+"),                        ""),
+    (re.compile(r"#+\s*"),                      ""),
+    (re.compile(r"`+"),                         ""),
+]
+
+
+def normalizar_para_tts(texto: str) -> str:
     """
-    Extrae oraciones completas y devuelve (oraciones, resto_incompleto).
-    Considera como fin de oracion: ., !, ?, salto de linea.
+    Convierte símbolos y palabras problemáticas a su equivalente hablado en español,
+    para que Piper TTS los pronuncie correctamente.
     """
-    oraciones: list[str] = []
-    inicio = 0
-    for i, ch in enumerate(buffer):
-        if ch in ".!?\n":
-            parte = buffer[inicio:i + 1].strip()
-            if parte:
-                oraciones.append(parte)
-            inicio = i + 1
-    resto = buffer[inicio:].strip()
-    return oraciones, resto
+    for patron, reemplazo in _TTS_REEMPLAZOS:
+        texto = patron.sub(reemplazo, texto)
+    # Colapsar espacios múltiples que puedan quedar
+    texto = re.sub(r"  +", " ", texto).strip()
+    return texto
 
 
-def saludo_fijo(nombre: str | None) -> str:
-    if nombre:
-        return random.choice(SALUDOS_CONOCIDO).format(nombre=nombre)
-    return random.choice(SALUDOS_DESCONOCIDO)
+# ── LLM ───────────────────────────────────────────────────────────────────────
 
+def precargar_modelo():
+    """
+    Precarga el modelo en RAM de forma bloqueante.
+    Se llama durante el WARMUP para que la primera respuesta real sea rápida.
+    """
+    try:
+        model = config_manager.get("text_model", "qwen2.5:1.5b")
+        log.info("[LLM] Precargando %s en RAM...", model)
+        t0 = time.time()
+        ollama.generate(model=model, prompt="hola", keep_alive=-1)
+        log.info("[LLM] %s listo en RAM (%.1fs)", model, time.time() - t0)
+    except Exception as e:
+        log.warning("[LLM] Error al precargar: %s — ejecuta: ollama serve", e)
+
+
+def cleanup_llm():
+    """Descarga el modelo de RAM al apagar BMO."""
+    try:
+        model = config_manager.get("text_model", "qwen2.5:1.5b")
+        ollama.generate(model=model, prompt="", keep_alive=0)
+        log.info("[LLM] Modelo descargado de RAM")
+    except Exception:
+        pass
+
+
+# ── Pipeline principal: LLM → TTS ─────────────────────────────────────────────
 
 def responder_con_tts(
     mensaje: str,
@@ -202,44 +191,19 @@ def responder_con_tts(
     nombre_persona: str | None = None,
 ):
     """
-    Genera respuesta con memoria persistente y configuración dinámica.
-    Mantiene streaming optimizado para baja latencia.
+    Genera respuesta con el LLM en streaming y la habla en tiempo real.
+    El texto pasa por normalizar_para_tts() antes de llegar a Piper.
     """
-    
-    # Usar sistema de memoria persistente
-    if config_manager.get("chat_memory", True):
-        # Agregar mensaje del usuario
-        persistent_memory.add_user_message(mensaje, nombre_persona)
-        
-        # Obtener contexto completo
-        messages = persistent_memory.get_context_for_llm(nombre_persona)
-    else:
-        # Modo legacy para compatibilidad
-        system = get_system_prompt()
-        if nombre_persona:
-            contexto = obtener_contexto_persona(nombre_persona)
-            system += f" El usuario se llama {nombre_persona}."
-            if contexto:
-                system += f" Contexto: {contexto}"
-        else:
-            ctx_anonimo = obtener_contexto_anonimo()
-            if ctx_anonimo:
-                system += f" Conversación reciente: {ctx_anonimo}"
+    persistent_memory.add_user_message(mensaje, nombre_persona)
+    messages = persistent_memory.get_context_for_llm(nombre_persona)
 
-        messages = [
-            {"role": "system", "content": system},
-            {"role": "user",   "content": mensaje},
-        ]
+    model = config_manager.get("text_model", "qwen2.5:1.5b")
+    options = config_manager.get_ollama_options()
 
-    # Obtener opciones dinámicas de Ollama
-    ollama_options = config_manager.get_ollama_options()
-    model = config_manager.get("text_model", "qwen2.5:3b")
-
-    # Cola de oraciones + worker de TTS (STREAMING ORIGINAL)
     tts_queue: list[str] = []
     tts_lock  = threading.Lock()
     tts_done  = threading.Event()
-    full_resp = []
+    full_resp: list[str] = []
 
     def _tts_worker():
         while True:
@@ -262,35 +226,32 @@ def responder_con_tts(
     sentence_buffer = ""
 
     try:
-        # STREAMING ORIGINAL - habla mientras genera
         stream = ollama.chat(
             model=model,
             messages=messages,
             stream=True,
-            options=ollama_options,
+            options=options,
         )
-        
+
         for chunk in stream:
             content = chunk["message"]["content"]
-            content = re.sub(r"\*+", "", content)
             full_resp.append(content)
             sentence_buffer += content
 
-            # Pipeline original: encolar al detectar puntuación en el chunk
             if any(p in content for p in ".!?\n"):
-                oracion = sentence_buffer.strip()
+                oracion = normalizar_para_tts(sentence_buffer.strip())
                 sentence_buffer = ""
                 if oracion and re.search(r"[a-záéíóúñ]{3,}", oracion, re.IGNORECASE):
                     log.info("[LLM→TTS] '%s'", oracion)
                     with tts_lock:
                         tts_queue.append(oracion)
 
-        # Resto sin puntuación
+        # Resto sin puntuación al final del stream
         if sentence_buffer.strip():
-            oracion = sentence_buffer.strip()
-            if oracion[-1] not in ".!?":
+            oracion = normalizar_para_tts(sentence_buffer.strip())
+            if oracion and oracion[-1] not in ".!?":
                 oracion += "."
-            if re.search(r"[a-záéíóúñ]{3,}", oracion, re.IGNORECASE):
+            if oracion and re.search(r"[a-záéíóúñ]{3,}", oracion, re.IGNORECASE):
                 with tts_lock:
                     tts_queue.append(oracion)
 
@@ -303,22 +264,13 @@ def responder_con_tts(
     worker.join()
 
     respuesta_completa = "".join(full_resp).strip()
-    
-    # Guardar en memoria persistente
-    if config_manager.get("chat_memory", True):
-        persistent_memory.add_assistant_message(respuesta_completa, nombre_persona)
-        
-        # Auto-commit cada cierto número de mensajes (solo si hay persona registrada)
-        if nombre_persona and len(persistent_memory.session_memory) >= 4:  # 2 intercambios
-            persistent_memory.commit_session_to_permanent(nombre_persona)
-    else:
-        # Modo legacy
-        if nombre_persona:
-            agregar_turno_persona(nombre_persona, mensaje, respuesta_completa)
-        else:
-            agregar_turno_anonimo(mensaje, respuesta_completa)
+    persistent_memory.add_assistant_message(respuesta_completa, nombre_persona)
+
+    if nombre_persona and len(persistent_memory.session_memory) >= 4:
+        persistent_memory.commit_session_to_permanent(nombre_persona)
 
 
-# Registro de cleanup (la precarga se hace desde main.py de forma bloqueante)
+# ── Inicialización ────────────────────────────────────────────────────────────
+
 register_shutdown_handler(cleanup_llm)
 register_shutdown_handler(persistent_memory.save_memory)
