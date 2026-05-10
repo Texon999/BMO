@@ -121,6 +121,7 @@ import ollama
 from src.display.display import DisplayBMO, Estado
 from src.vision.vision   import VisionBMO
 from src.voice.voice     import VozBMO
+from src.voice.wake_word import WakeWordDetector
 from src.brain.brain     import responder_con_tts, detectar_nombre, saludo_fijo, precargar_modelo
 from src.memory.register import nombres_a_ids
 from src.config.runtime import (
@@ -181,6 +182,14 @@ class AgenteBMO:
             log.warning("  BMO funcionará sin reconocimiento facial (solo audio)")
         
         self.voz = VozBMO(mic_device=MIC_DEVICE)
+
+        # Wake word detector — usa el mismo modelo STT de VozBMO
+        self._wake = WakeWordDetector(
+            stt=self.voz.stt,
+            mic_device=self.voz._mic,
+            sample_rate=16000,
+            tts_rate=self.voz._tts_rate,
+        )
 
         self._running = True
 
@@ -305,8 +314,13 @@ class AgenteBMO:
                 time.sleep(1.0)
 
     def _ciclo_escucha(self):
-        """Un ciclo completo: saludo automático → escuchar → procesar → responder."""
-
+        """
+        Un ciclo completo:
+          1. Saludo automático si la cámara reconoce a alguien nuevo
+          2. Escucha pasiva esperando el wake word "BMO"
+          3. Al detectar wake word → tín → escucha el prompt completo
+          4. Procesa y responde
+        """
         # Saludo automático si la cámara reconoce a alguien nuevo
         with self._lock_camara:
             nombre_reconocido = self._nombre_camara_reconocido
@@ -321,45 +335,49 @@ class AgenteBMO:
                 self.voz.hablar(saludo)
                 self.display.set_estado(Estado.IDLE)
 
-        # Escuchar
-        self.display.set_estado(Estado.LISTENING)
-        texto = self.voz.escuchar()
+        # ── Escucha pasiva: esperar wake word ─────────────────────────────────
+        self.display.set_estado(Estado.IDLE)
+        wake_detectado, prompt_inline = self._wake.escuchar_pasivo()
+
+        if not wake_detectado:
+            return   # nadie dijo "BMO", seguir esperando
+
+        # ── Wake word detectado: escuchar el prompt completo ──────────────────
+        # Si el prompt ya venía inline ("BMO qué hora es"), usarlo directamente.
+        # Si no, escuchar el siguiente enunciado completo.
+        if prompt_inline:
+            texto = prompt_inline
+            log.info(f"[WAKE] Prompt inline: '{texto}'")
+        else:
+            self.display.set_estado(Estado.LISTENING)
+            texto = self.voz.escuchar()
 
         if not texto:
             self.display.set_estado(Estado.IDLE)
-            time.sleep(0.5)
             return
 
         log.info(f"Escuché: '{texto}'")
 
-        # Leer estado de cámara en este momento
+        # Leer estado de cámara
         with self._lock_camara:
-            nombre_reconocido   = self._nombre_camara_reconocido
-            cara_desconocida    = self._cara_desconocida_presente
-            camara_disponible   = self.vision is not None
+            nombre_reconocido = self._nombre_camara_reconocido
+            cara_desconocida  = self._cara_desconocida_presente
+            camara_disponible = self.vision is not None
 
         # ── Lógica de nombre ──────────────────────────────────────────────────
         nombre_nuevo = detectar_nombre(texto)
 
         if nombre_nuevo:
-            conocidos = list(nombres_a_ids().values())
+            conocidos     = list(nombres_a_ids().values())
             ya_registrado = nombre_nuevo.lower() in [n.lower() for n in conocidos]
 
             if camara_disponible and cara_desconocida and not ya_registrado:
-                # CASO 1: Cámara activa + cara desconocida + nombre nuevo
-                # → Registrar foto y hacer el nombre persistente
                 log.info(f"[NOMBRE] Cara desconocida dijo '{nombre_nuevo}' → registrando foto")
                 self._registrar_persona(nombre_nuevo)
                 return
-
             elif camara_disponible and nombre_reconocido:
-                # CASO 2: Cámara activa + cara ya reconocida
-                # → Ignorar lo que diga, ya sabemos quién es
                 log.info(f"[NOMBRE] Cámara ya reconoció a '{nombre_reconocido}', ignorando '{nombre_nuevo}'")
-
             elif not camara_disponible and not ya_registrado:
-                # CASO 3: Sin cámara + nombre nuevo
-                # → Guardar en caché temporal (solo RAM, sin foto)
                 self._nombre_cache_temporal = nombre_nuevo
                 self._nombre_activo = nombre_nuevo
                 log.info(f"[NOMBRE] Sin cámara → nombre en caché temporal: '{nombre_nuevo}'")
@@ -367,24 +385,17 @@ class AgenteBMO:
                 self.voz.hablar(f"Hola {nombre_nuevo}! Te recuerdo mientras hablamos, pero sin cámara no puedo guardar tu cara.")
                 self.display.set_estado(Estado.IDLE)
                 return
-
             elif ya_registrado:
-                # CASO 4: Nombre ya registrado → usar ese nombre
-                log.info(f"[NOMBRE] '{nombre_nuevo}' ya está registrado, usando como contexto")
+                log.info(f"[NOMBRE] '{nombre_nuevo}' ya está registrado")
                 if not camara_disponible:
                     self._nombre_cache_temporal = nombre_nuevo
                     self._nombre_activo = nombre_nuevo
 
-        # Nombre activo para el LLM (puede ser de cámara o caché temporal)
+        # Nombre activo para el LLM
         with self._lock_camara:
             nombre_contexto = self._nombre_activo
 
-        if nombre_contexto:
-            log.info(f"Pensando... (contexto: {nombre_contexto})")
-        else:
-            log.info("Pensando... (contexto: ninguno)")
-
-        # Responder
+        log.info("Pensando... (contexto: %s)", nombre_contexto or "ninguno")
         self.display.set_estado(Estado.THINKING)
 
         def _on_speaking():
