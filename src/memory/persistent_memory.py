@@ -1,16 +1,17 @@
 """
 Sistema de Memoria Persistente para BMO.
 
-Usa MongoDB si está disponible, JSON como fallback automático.
-La interfaz pública es idéntica en ambos casos — el resto del código
-no necesita saber qué backend está activo.
+Reglas de negocio:
+  1. Solo se guarda historial de personas con cara registrada (persona != None).
+     Sin cara reconocida → la sesión se descarta al terminar, no persiste nada.
+  2. Máximo 6 mensajes por persona (sliding window).
+     Al llegar el 7mo, el más viejo se borra automáticamente.
+  3. Se guarda solo el contexto (primeros ~120 chars), no el mensaje completo.
+  4. Anónimo: solo el último intercambio en RAM, nunca toca disco ni MongoDB.
 
-Colecciones MongoDB:
-  - chat_history : mensajes con TTL de 30 días, máx 40 por persona
-  - personas     : datos + embeddings (ver mongo_store.py)
-
-Fallback JSON:
-  - data/chat_memory.json : historial de sesión actual
+Backends:
+  - MongoDB (preferido): colección chat_history con sliding window
+  - JSON (fallback):     data/chat_memory.json cuando MongoDB no está disponible
 """
 import json
 import logging
@@ -22,9 +23,11 @@ from src.storage import mongo_store
 
 log = logging.getLogger("BMO.Memory")
 
-# ── Configuración ─────────────────────────────────────────────────────────────
+# ── Constantes ────────────────────────────────────────────────────────────────
 
-JSON_FILE  = Path("data/chat_memory.json")
+JSON_FILE          = Path("data/chat_memory.json")
+MAX_MSGS_PERSONA   = 6     # sliding window — máximo mensajes guardados por persona
+MAX_CHARS_CONTEXTO = 120   # truncar mensajes al guardar (solo contexto)
 
 _SYSTEM_CONTENT = (
     "Eres BMO, un robot asistente creado por Zambrano, "
@@ -41,130 +44,79 @@ _SYSTEM_CONTENT = (
 _SYSTEM_MSG = {"role": "system", "content": _SYSTEM_CONTENT}
 
 
+def _truncar(texto: str) -> str:
+    """Guarda solo el contexto esencial, no el mensaje completo."""
+    texto = texto.strip()
+    if len(texto) <= MAX_CHARS_CONTEXTO:
+        return texto
+    corte = texto.rfind(" ", 0, MAX_CHARS_CONTEXTO)
+    if corte < MAX_CHARS_CONTEXTO // 2:
+        corte = MAX_CHARS_CONTEXTO
+    return texto[:corte] + "…"
+
+
 # ══════════════════════════════════════════════════════════════════════════════
-# Backend JSON (fallback)
+# Backend JSON (fallback cuando MongoDB no está disponible)
 # ══════════════════════════════════════════════════════════════════════════════
 
 class _JsonMemory:
     """
-    Memoria basada en JSON — idéntica al comportamiento anterior.
-    Se usa cuando MongoDB no está disponible.
+    Memoria basada en JSON con sliding window de MAX_MSGS_PERSONA mensajes.
+    Solo persiste mensajes de personas con cara registrada.
     """
 
     def __init__(self):
-        self.permanent_memory: list[dict] = []
-        self.session_memory:   list[dict] = []
-        self._load()
-        atexit.register(self.save_memory)
+        self.session_memory: list[dict] = []
+        # {persona: [msg, msg, ...]} — máx MAX_MSGS_PERSONA por persona
+        self._historial: dict[str, list[dict]] = {}
+        self._cargar()
+        atexit.register(self._guardar)
 
-    def _load(self):
-        if JSON_FILE.exists():
-            try:
-                data = json.loads(JSON_FILE.read_text(encoding="utf-8"))
-                self.permanent_memory = data if isinstance(data, list) else data.get("permanent", [])
-                log.info("[MEMORY/JSON] %d mensajes cargados", len(self.permanent_memory))
-            except Exception as e:
-                log.warning("[MEMORY/JSON] Error al cargar: %s", e)
-                self.permanent_memory = []
-        if not self.permanent_memory or self.permanent_memory[0].get("role") != "system":
-            self.permanent_memory.insert(0, {**_SYSTEM_MSG, "timestamp": datetime.now().isoformat()})
-
-    def add_user_message(self, content: str, persona: str | None = None):
-        msg = {"role": "user", "content": content, "timestamp": datetime.now().isoformat()}
-        if persona:
-            msg["persona"] = persona
-            self.session_memory.append(msg)
-        else:
-            self.session_memory = [msg]   # anónimo: sobrescribe
-
-    def add_assistant_message(self, content: str, persona: str | None = None):
-        self.session_memory.append({
-            "role": "assistant", "content": content,
-            "timestamp": datetime.now().isoformat(),
-        })
-
-    def get_context_for_llm(self, persona: str | None = None) -> list[dict]:
-        system = {**_SYSTEM_MSG}
-        if persona:
-            system["content"] += f" El usuario se llama {persona}."
-        ctx = [system]
-        if persona:
-            history = [
-                m for m in self.permanent_memory[1:]
-                if m.get("persona") == persona or m.get("role") == "assistant"
-                   or "persona" not in m
-            ]
-            ctx.extend(history[-6:])
-            ctx.extend(self.session_memory[-4:])
-        else:
-            ctx.extend(self.session_memory)
-        return ctx
-
-    def commit_session_to_permanent(self, persona: str | None = None):
-        if not self.session_memory:
+    def _cargar(self):
+        if not JSON_FILE.exists():
             return
-        if persona is None:
-            self.session_memory = []
-            return
-        for msg in self.session_memory:
-            if msg.get("role") == "user" and "persona" not in msg:
-                msg["persona"] = persona
-        self.permanent_memory.extend(self.session_memory)
-        self._trim()
-        self.session_memory = []
-        self.save_memory()
+        try:
+            data = json.loads(JSON_FILE.read_text(encoding="utf-8"))
+            # Formato: {"persona": [{"role":..., "content":...}, ...]}
+            if isinstance(data, dict) and "historial" in data:
+                self._historial = data["historial"]
+            # Compatibilidad con formato antiguo (lista de mensajes)
+            elif isinstance(data, list):
+                log.info("[MEMORY/JSON] Formato antiguo detectado, migrando...")
+                self._historial = {}
+            log.info("[MEMORY/JSON] Historial cargado: %d personas", len(self._historial))
+        except Exception as e:
+            log.warning("[MEMORY/JSON] Error al cargar: %s", e)
+            self._historial = {}
 
-    def _trim(self, max_conv: int = 20):
-        system = self.permanent_memory[:1]
-        rest   = self.permanent_memory[1:]
-        users  = [i for i, m in enumerate(rest) if m.get("role") == "user"]
-        if len(users) > max_conv:
-            rest = rest[users[-max_conv]:]
-        self.permanent_memory = system + rest
-
-    def save_memory(self):
+    def _guardar(self):
         try:
             JSON_FILE.parent.mkdir(parents=True, exist_ok=True)
             JSON_FILE.write_text(
-                json.dumps(self.permanent_memory, indent=2, ensure_ascii=False),
+                json.dumps({"historial": self._historial}, indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
         except Exception as e:
             log.error("[MEMORY/JSON] Error al guardar: %s", e)
 
-    def clear_session(self):
-        self.session_memory = []
+    def _agregar_a_historial(self, persona: str, role: str, content: str):
+        """Agrega un mensaje al historial de una persona con sliding window."""
+        if persona not in self._historial:
+            self._historial[persona] = []
+        msgs = self._historial[persona]
+        msgs.append({"role": role, "content": _truncar(content)})
+        # Sliding window: si supera el límite, borrar el más viejo
+        if len(msgs) > MAX_MSGS_PERSONA:
+            msgs.pop(0)
+        self._historial[persona] = msgs
 
-    def get_memory_stats(self) -> dict:
-        return {
-            "backend": "json",
-            "permanent_messages": len(self.permanent_memory),
-            "session_messages":   len(self.session_memory),
-        }
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# Backend MongoDB
-# ══════════════════════════════════════════════════════════════════════════════
-
-class _MongoMemory:
-    """
-    Memoria basada en MongoDB.
-    - Historial persistente por persona en la colección chat_history.
-    - Sesión activa en RAM (igual que antes), se persiste al hacer commit.
-    - Anónimo: solo el último intercambio en RAM, nunca persiste.
-    """
-
-    def __init__(self):
-        self.session_memory: list[dict] = []
+    # ── Interfaz pública ──────────────────────────────────────────────────────
 
     def add_user_message(self, content: str, persona: str | None = None):
         if persona:
-            self.session_memory.append({
-                "role": "user", "content": content, "persona": persona,
-            })
+            self.session_memory.append({"role": "user", "content": content, "persona": persona})
         else:
-            # Anónimo: sobrescribe la sesión
+            # Anónimo: solo el último mensaje en RAM, nunca persiste
             self.session_memory = [{"role": "user", "content": content}]
 
     def add_assistant_message(self, content: str, persona: str | None = None):
@@ -174,43 +126,116 @@ class _MongoMemory:
         system = {**_SYSTEM_MSG}
         if persona:
             system["content"] += f" El usuario se llama {persona}."
-
         ctx = [system]
-
         if persona:
-            # Historial permanente de esta persona desde MongoDB
-            history = mongo_store.obtener_historial(persona, limit=6)
-            ctx.extend(history)
-            # Sesión actual (últimos 4 mensajes)
+            # Historial persistente de esta persona (últimos MAX_MSGS_PERSONA)
+            ctx.extend(self._historial.get(persona, []))
+            # Sesión actual (últimos 4 mensajes de la sesión en curso)
             ctx.extend(self.session_memory[-4:])
         else:
             # Anónimo: solo el último mensaje de sesión
-            ctx.extend(self.session_memory)
-
+            ctx.extend(self.session_memory[-1:] if self.session_memory else [])
         return ctx
 
     def commit_session_to_permanent(self, persona: str | None = None):
+        """
+        Persiste la sesión actual.
+        Sin persona (cara no reconocida) → descarta todo, no guarda nada.
+        """
         if not self.session_memory:
             return
         if persona is None:
-            # Anónimo: no persiste
+            log.debug("[MEMORY/JSON] Sin cara reconocida — sesión descartada")
             self.session_memory = []
             return
-        # Guardar cada mensaje de la sesión en MongoDB
+        # Guardar cada mensaje de la sesión con sliding window
+        for msg in self.session_memory:
+            self._agregar_a_historial(persona, msg["role"], msg["content"])
+        self.session_memory = []
+        self._guardar()
+        log.debug("[MEMORY/JSON] Sesión de '%s' persistida (%d msgs en historial)",
+                  persona, len(self._historial.get(persona, [])))
+
+    def clear_session(self):
+        self.session_memory = []
+
+    def save_memory(self):
+        self._guardar()
+
+    def get_memory_stats(self) -> dict:
+        return {
+            "backend":          "json",
+            "personas":         len(self._historial),
+            "session_messages": len(self.session_memory),
+            "historial":        {p: len(m) for p, m in self._historial.items()},
+        }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Backend MongoDB
+# ══════════════════════════════════════════════════════════════════════════════
+
+class _MongoMemory:
+    """
+    Memoria basada en MongoDB con sliding window de MAX_MSGS_PERSONA mensajes.
+    Solo persiste mensajes de personas con cara registrada.
+    """
+
+    def __init__(self):
+        self.session_memory: list[dict] = []
+
+    def add_user_message(self, content: str, persona: str | None = None):
+        if persona:
+            self.session_memory.append({"role": "user", "content": content, "persona": persona})
+        else:
+            # Anónimo: solo el último mensaje en RAM
+            self.session_memory = [{"role": "user", "content": content}]
+
+    def add_assistant_message(self, content: str, persona: str | None = None):
+        self.session_memory.append({"role": "assistant", "content": content})
+
+    def get_context_for_llm(self, persona: str | None = None) -> list[dict]:
+        system = {**_SYSTEM_MSG}
+        if persona:
+            system["content"] += f" El usuario se llama {persona}."
+        ctx = [system]
+        if persona:
+            # Historial persistente desde MongoDB (últimos MAX_MSGS_PERSONA)
+            ctx.extend(mongo_store.obtener_historial(persona, limit=MAX_MSGS_PERSONA))
+            # Sesión actual
+            ctx.extend(self.session_memory[-4:])
+        else:
+            # Anónimo: solo el último mensaje
+            ctx.extend(self.session_memory[-1:] if self.session_memory else [])
+        return ctx
+
+    def commit_session_to_permanent(self, persona: str | None = None):
+        """
+        Persiste la sesión actual en MongoDB.
+        Sin persona (cara no reconocida) → descarta todo, no guarda nada.
+        """
+        if not self.session_memory:
+            return
+        if persona is None:
+            log.debug("[MEMORY/MONGO] Sin cara reconocida — sesión descartada")
+            self.session_memory = []
+            return
+        # Guardar cada mensaje — mongo_store aplica el sliding window
         for msg in self.session_memory:
             mongo_store.guardar_mensaje(
                 role=msg["role"],
                 content=msg["content"],
                 persona=persona,
             )
+        total = mongo_store.contar_mensajes(persona)
+        log.debug("[MEMORY/MONGO] Sesión de '%s' persistida (%d msgs en DB)", persona, total)
         self.session_memory = []
-        log.debug("[MEMORY/MONGO] Sesión de '%s' persistida", persona)
 
     def clear_session(self):
         self.session_memory = []
 
     def save_memory(self):
-        pass   # MongoDB persiste en tiempo real, no hay nada que hacer
+        pass  # MongoDB persiste en tiempo real
 
     def get_memory_stats(self) -> dict:
         return {"backend": "mongodb", **mongo_store.stats()}
@@ -221,7 +246,6 @@ class _MongoMemory:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _crear_memoria():
-    """Intenta MongoDB (URI desde config.json), cae a JSON si no está disponible."""
     try:
         from src.config.config_manager import config_manager
         uri = config_manager.get("mongo_uri", "mongodb://localhost:27017")
@@ -239,36 +263,38 @@ def _crear_memoria():
 persistent_memory = _crear_memoria()
 
 
-# ── Clase pública para tests (instancias independientes) ─────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Clase pública para tests (instancias independientes, siempre JSON)
+# ══════════════════════════════════════════════════════════════════════════════
 
 class PersistentMemory:
     """
-    Wrapper público para crear instancias independientes en tests.
-    Siempre usa JSON (no depende de MongoDB para tests unitarios).
+    Instancias independientes para tests unitarios.
+    Siempre usa el backend JSON (no depende de MongoDB).
     """
 
     def __init__(self, memory_file: str = "data/chat_memory.json", max_conversations: int = 10):
-        self._impl = _JsonMemory.__new__(_JsonMemory)
-        self._impl.permanent_memory = []
-        self._impl.session_memory   = []
-        self._impl.JSON_FILE = Path(memory_file)   # type: ignore[attr-defined]
-        # Monkey-patch para que use el archivo correcto
+        impl = _JsonMemory.__new__(_JsonMemory)
+        impl.session_memory = []
+        impl._historial     = {}
+        # Redirigir guardado al archivo de test
+        _path = Path(memory_file)
         import types
-        def _save(self_inner):
+
+        def _save_test(self_inner):
             try:
-                self_inner.JSON_FILE.parent.mkdir(parents=True, exist_ok=True)
-                self_inner.JSON_FILE.write_text(
-                    json.dumps(self_inner.permanent_memory, indent=2, ensure_ascii=False),
+                _path.parent.mkdir(parents=True, exist_ok=True)
+                _path.write_text(
+                    json.dumps({"historial": self_inner._historial}, indent=2, ensure_ascii=False),
                     encoding="utf-8",
                 )
             except Exception as e:
-                log.error("[MEMORY/JSON] Error al guardar: %s", e)
-        self._impl.save_memory = types.MethodType(_save, self._impl)
-        self._impl.permanent_memory.insert(0, {
-            **_SYSTEM_MSG, "timestamp": datetime.now().isoformat()
-        })
+                log.error("[MEMORY/JSON] Error al guardar test: %s", e)
 
-    # Delegar todo al impl
+        impl._guardar    = types.MethodType(_save_test, impl)
+        impl.save_memory = types.MethodType(_save_test, impl)
+        self._impl = impl
+
     def add_user_message(self, content, persona=None):
         self._impl.add_user_message(content, persona)
 
@@ -296,4 +322,8 @@ class PersistentMemory:
 
     @property
     def permanent_memory(self):
-        return self._impl.permanent_memory
+        # Compatibilidad con tests que leen permanent_memory
+        system = [{**_SYSTEM_MSG}]
+        for msgs in self._impl._historial.values():
+            system.extend(msgs)
+        return system
