@@ -4,17 +4,22 @@ Módulo de display de BMO — Animación de la cara en pantalla.
 Muestra una ventana con la cara animada de BMO según el estado actual:
   - warmup:    Cara de inicio mientras carga
   - idle:      Cara en reposo, esperando
-  - listening: Cara escuchando (micrófono activo)
-  - thinking:  Cara pensando (LLM procesando)
-  - speaking:  Cara hablando (TTS reproduciendo)
+  - listening: Cara escuchando — 6 frames, animación media
+  - thinking:  Cara pensando   — 9 frames, animación media
+  - speaking:  Cara hablando   — 8 frames, animación rápida
 
 Las imágenes se cargan desde assets/faces/{estado}/*.png al iniciar.
 Si no hay imágenes para un estado, se usa un rectángulo de color como fallback.
 Las imágenes PNG con canal alfa (RGBA) se componen sobre un fondo oscuro.
 
+FPS por estado (independientes):
+  - warmup/idle/error : 2 FPS  — estáticos o casi estáticos
+  - listening         : 8 FPS  — animación media (6 frames → ciclo ~0.75s)
+  - thinking          : 8 FPS  — animación media (9 frames → ciclo ~1.1s)
+  - speaking          : 12 FPS — animación rápida (8 frames → ciclo ~0.67s)
+
 Modo headless (BMO_HEADLESS=true):
-  No abre ninguna ventana. Útil para ejecutar BMO sin pantalla (servidor, SSH).
-  tick() simplemente duerme 30ms y devuelve True.
+  No abre ninguna ventana. tick() simplemente duerme 30ms y devuelve True.
 
 Overlay de nombre:
   Cuando BMO reconoce a alguien por cámara, muestra "Hola, {nombre}!"
@@ -31,10 +36,20 @@ from enum import Enum, auto
 from src.config.runtime import HEADLESS
 
 
-FACE_DIR   = Path("assets/faces")
-WIN_NAME   = "BMO"
+FACE_DIR     = Path("assets/faces")
+WIN_NAME     = "BMO"
 WIN_W, WIN_H = 480, 480
-FPS_ANIM   = 4   # menor = animación más lenta (cambio de frame cada 1/FPS_ANIM s)
+
+# FPS de animación por estado — ajusta aquí para cambiar la velocidad
+_FPS_POR_ESTADO: dict[str, float] = {
+    "warmup":    2.0,
+    "idle":      2.0,
+    "listening": 8.0,   # 6 frames → ciclo completo ~0.75s
+    "thinking":  8.0,   # 9 frames → ciclo completo ~1.1s
+    "speaking":  12.0,  # 8 frames → ciclo completo ~0.67s
+    "error":     2.0,
+}
+_FPS_DEFAULT = 4.0
 
 
 class Estado(Enum):
@@ -43,6 +58,7 @@ class Estado(Enum):
     LISTENING = "listening"
     THINKING  = "thinking"
     SPEAKING  = "speaking"
+    ERROR     = "error"
 
 
 class DisplayBMO:
@@ -50,10 +66,10 @@ class DisplayBMO:
         self._frames: dict[str, list[np.ndarray]] = {}
         self._load_faces()
 
-        self.estado   = Estado.WARMUP
-        self._idx     = 0
-        self._last_t  = time.time()
-        self._nombre  = None   # nombre de la persona detectada
+        self.estado  = Estado.WARMUP
+        self._idx    = 0
+        self._last_t = time.time()
+        self._nombre = None   # nombre de la persona detectada
 
         self._headless = HEADLESS
         if not self._headless:
@@ -63,66 +79,106 @@ class DisplayBMO:
     # ── Carga de imágenes ─────────────────────────────────────────────────────
 
     def _load_faces(self):
+        """
+        Carga todos los frames PNG de cada estado.
+        Ordena numéricamente para que '9.png' no vaya antes que '10.png'.
+        """
         for estado in Estado:
             folder = FACE_DIR / estado.value
-            pngs = sorted(folder.glob("*.png")) if folder.exists() else []
-            if pngs:
-                self._frames[estado.value] = [
-                    cv2.imread(str(p), cv2.IMREAD_UNCHANGED) for p in pngs
-                ]
+            if folder.exists():
+                # Ordenar numéricamente extrayendo el primer número del nombre
+                pngs = sorted(
+                    folder.glob("*.png"),
+                    key=lambda p: int("".join(filter(str.isdigit, p.stem)) or "0"),
+                )
             else:
-                # Fallback: rectángulo de color sólido
-                color = {
-                    "warmup":    (40, 40, 40),
-                    "idle":      (60, 120, 60),
-                    "listening": (60, 120, 180),
-                    "thinking":  (120, 80, 40),
-                    "speaking":  (40, 160, 80),
-                }.get(estado.value, (80, 80, 80))
-                fb = np.full((WIN_H, WIN_W, 3), color, dtype=np.uint8)
-                self._frames[estado.value] = [fb]
+                pngs = []
+
+            if pngs:
+                loaded = []
+                for p in pngs:
+                    img = cv2.imread(str(p), cv2.IMREAD_UNCHANGED)
+                    if img is not None:
+                        loaded.append(img)
+                if loaded:
+                    self._frames[estado.value] = loaded
+                    continue
+
+            # Fallback: rectángulo de color sólido
+            color = {
+                "warmup":    (40,  40,  40),
+                "idle":      (60,  120, 60),
+                "listening": (60,  120, 180),
+                "thinking":  (120, 80,  40),
+                "speaking":  (40,  160, 80),
+                "error":     (180, 40,  40),
+            }.get(estado.value, (80, 80, 80))
+            fb = np.full((WIN_H, WIN_W, 3), color, dtype=np.uint8)
+            self._frames[estado.value] = [fb]
 
     # ── Actualización ─────────────────────────────────────────────────────────
 
     def set_estado(self, estado: Estado, nombre: str | None = None):
         if estado != self.estado:
-            self.estado = estado
-            self._idx   = 0
+            self.estado  = estado
+            self._idx    = 0          # reiniciar animación al cambiar estado
+            self._last_t = time.time()
         if nombre is not None:
             self._nombre = nombre
 
     def tick(self) -> bool:
-        """Avanza la animación y muestra el frame. Devuelve False si se presiona Q."""
+        """
+        Avanza la animación y muestra el frame actual.
+        Devuelve False si el usuario presiona Q (señal de apagado).
+        """
         if self._headless:
             time.sleep(0.03)
             return True
 
-        now = time.time()
-        if now - self._last_t >= 1.0 / FPS_ANIM:
-            frames = self._frames[self.estado.value]
+        fps    = _FPS_POR_ESTADO.get(self.estado.value, _FPS_DEFAULT)
+        period = 1.0 / fps
+        now    = time.time()
+
+        if now - self._last_t >= period:
+            frames    = self._frames[self.estado.value]
             self._idx = (self._idx + 1) % len(frames)
             self._last_t = now
 
         frame = self._frames[self.estado.value][self._idx].copy()
 
-        # Convertir RGBA → BGR si es necesario
-        if frame.shape[2] == 4:
-            bgr  = frame[:, :, :3]
+        # Componer RGBA sobre fondo oscuro
+        if frame.ndim == 3 and frame.shape[2] == 4:
+            bgr   = frame[:, :, :3]
             alpha = frame[:, :, 3:4] / 255.0
-            bg   = np.full_like(bgr, 30)
+            bg    = np.full_like(bgr, 30)
             frame = (bgr * alpha + bg * (1 - alpha)).astype(np.uint8)
 
-        # Resize por si acaso
         frame = cv2.resize(frame, (WIN_W, WIN_H))
 
-        # Overlay de nombre
+        # Overlay: nombre de la persona reconocida
         if self._nombre and self.estado in (Estado.IDLE, Estado.SPEAKING):
-            cv2.putText(frame, f"Hola, {self._nombre}!",
-                        (15, WIN_H - 20), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7, (100, 255, 100), 2)
+            cv2.putText(
+                frame, f"Hola, {self._nombre}!",
+                (15, WIN_H - 20), cv2.FONT_HERSHEY_SIMPLEX,
+                0.7, (100, 255, 100), 2,
+            )
+
+        # Overlay: estado actual (esquina superior izquierda)
         label = self.estado.value.upper()
-        cv2.putText(frame, label, (10, 25),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+        cv2.putText(
+            frame, label,
+            (10, 25), cv2.FONT_HERSHEY_SIMPLEX,
+            0.6, (200, 200, 200), 1,
+        )
+
+        # Overlay: número de frame actual / total (debug)
+        frames_total = len(self._frames[self.estado.value])
+        if frames_total > 1:
+            cv2.putText(
+                frame, f"{self._idx + 1}/{frames_total}",
+                (WIN_W - 55, 25), cv2.FONT_HERSHEY_SIMPLEX,
+                0.5, (150, 150, 150), 1,
+            )
 
         cv2.imshow(WIN_NAME, frame)
         key = cv2.waitKey(1) & 0xFF
@@ -131,3 +187,10 @@ class DisplayBMO:
     def cerrar(self):
         if not self._headless:
             cv2.destroyAllWindows()
+
+    def get_info(self) -> dict:
+        """Devuelve información de los frames cargados (útil para debug)."""
+        return {
+            estado: len(frames)
+            for estado, frames in self._frames.items()
+        }
