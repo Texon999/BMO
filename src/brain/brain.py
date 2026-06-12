@@ -256,10 +256,11 @@ def normalizar_texto_entrada(texto: str) -> str:
     texto_original = texto
     
     # Normalizar "número p" o "número P-I" a "número pi" (más agresivo)
-    texto = re.sub(r'número\s+p\b', 'número pi', texto, flags=re.IGNORECASE)
-    texto = re.sub(r'número\s+p-i\b', 'número pi', texto, flags=re.IGNORECASE)
-    texto = re.sub(r'número\s+p\.', 'número pi', texto, flags=re.IGNORECASE)
-    texto = re.sub(r'número\s+pi\b', 'número pi', texto, flags=re.IGNORECASE)  # Ya normalizado
+    # Se usa n[úu]mero para matchear tanto con tilde como sin ella (Whisper a veces omite acentos)
+    texto = re.sub(r'n[úu]mero\s+p\b', 'número pi', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'n[úu]mero\s+p-i\b', 'número pi', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'n[úu]mero\s+p\.', 'número pi', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'n[úu]mero\s+pi\b', 'número pi', texto, flags=re.IGNORECASE)
     
     # Normalizar "el p" a "el pi" (cuando se refiere al número)
     texto = re.sub(r'\bel\s+p\b', 'el pi', texto, flags=re.IGNORECASE)
@@ -270,11 +271,12 @@ def normalizar_texto_entrada(texto: str) -> str:
     texto = re.sub(r'\bde\s+p-i\b', 'de pi', texto, flags=re.IGNORECASE)
     
     # Normalizar "tiene el número p" a "tiene el número pi"
-    texto = re.sub(r'tiene\s+el\s+número\s+p\b', 'tiene el número pi', texto, flags=re.IGNORECASE)
-    texto = re.sub(r'tiene\s+el\s+número\s+p-i\b', 'tiene el número pi', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'tiene\s+el\s+n[úu]mero\s+p\b', 'tiene el número pi', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'tiene\s+el\s+n[úu]mero\s+p-i\b', 'tiene el número pi', texto, flags=re.IGNORECASE)
     
     # Normalizar "dígitos tiene" variantes
-    texto = re.sub(r'dijitos', 'dígitos', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'd[ií]jitos', 'dígitos', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'digitos', 'dígitos', texto, flags=re.IGNORECASE)
     
     if texto != texto_original:
         log.info(f"[NORMALIZACIÓN] '{texto_original}' → '{texto}'")

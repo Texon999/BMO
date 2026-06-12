@@ -144,7 +144,7 @@ def categorizar_pregunta(texto: str) -> str:
     Clasifica *texto* en una de las categorías de QueryCategory.
 
     Orden de prioridad:
-      OPINION → COMPARE → CREATIVE → EXPLAIN → TECHNICAL → FACTUAL → PREGUNTA → GREETING → SIMPLE
+      OPINION → COMPARE → CREATIVE → EXPLAIN → PREGUNTA → FACTUAL → TECHNICAL → GREETING → SIMPLE
 
     Nunca lanza excepción; ante cualquier error devuelve SIMPLE.
     """
@@ -164,14 +164,14 @@ def categorizar_pregunta(texto: str) -> str:
         if re.search(PATRON_EXPLICAR, t, re.IGNORECASE):
             return QueryCategory.EXPLAIN
 
-        if re.search(PATRON_TECNICO, t, re.IGNORECASE):
-            return QueryCategory.TECHNICAL
+        if re.search(PATRON_PREGUNTA, t, re.IGNORECASE):
+            return QueryCategory.FACTUAL
 
         if re.search(PATRON_FACTUAL, t, re.IGNORECASE):
             return QueryCategory.FACTUAL
 
-        if re.search(PATRON_PREGUNTA, t, re.IGNORECASE):
-            return QueryCategory.FACTUAL
+        if re.search(PATRON_TECNICO, t, re.IGNORECASE):
+            return QueryCategory.TECHNICAL
 
         if re.search(PATRON_SALUDO, t, re.IGNORECASE):
             return QueryCategory.GREETING
