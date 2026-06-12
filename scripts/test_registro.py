@@ -264,7 +264,14 @@ if mongo_ok:
 
     sub("3.4 Búsqueda por embedding: reconoce a la persona registrada")
     todos = cargar_embeddings_todos()
-    resultado = mongo_store.buscar_persona_por_similitud(emb_test, umbral=0.9)
+    q_norm = emb_test / (np.linalg.norm(emb_test) + 1e-9)
+    resultado = None
+    for nombre, embs in todos.items():
+        for emb in embs:
+            e_norm = emb / (np.linalg.norm(emb) + 1e-9)
+            sim = float(np.dot(q_norm, e_norm))
+            if sim >= 0.9:
+                resultado = (nombre, sim)
     print(f"  {INFO}  Búsqueda embedding: {resultado}")
     reg("Embedding registrado se reconoce correctamente",
         resultado is not None and nombre_test.lower() in resultado[0].lower(),

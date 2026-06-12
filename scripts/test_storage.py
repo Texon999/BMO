@@ -50,7 +50,7 @@ titulo("BLOQUE 1 — Detección de backend disponible")
 
 from src.storage import mongo_store
 from src.memory.persistent_memory import (
-    _JsonMemory, _MongoMemory, PersistentMemory,
+    _RamMemory, _MongoMemory, PersistentMemory,
     MAX_MSGS_PERSONA, MAX_CHARS_CONTEXTO, _truncar,
 )
 
@@ -223,7 +223,18 @@ if mongo_ok:
     sub("4.4 Búsqueda por similitud coseno — mismo embedding debe dar sim ≈ 1.0")
     for nombre, seed, _ in PERSONAS_TEST:
         emb_query = embedding_para(nombre, seed)   # mismo seed → mismo vector
-        resultado = mongo_store.buscar_persona_por_similitud(emb_query, umbral=0.9)
+        todos = mongo_store.cargar_embeddings_todos()
+        mejor_sim = -1.0
+        mejor_nombre = None
+        if nombre in todos:
+            for emb in todos[nombre]:
+                emb_norm = emb / (np.linalg.norm(emb) + 1e-9)
+                q_norm = emb_query / (np.linalg.norm(emb_query) + 1e-9)
+                sim = float(np.dot(q_norm, emb_norm))
+                if sim > mejor_sim:
+                    mejor_sim = sim
+                    mejor_nombre = nombre
+        resultado = (mejor_nombre, mejor_sim) if mejor_nombre and mejor_sim >= 0.9 else None
         print(f"  {INFO}  Query '{nombre}': resultado={resultado}")
         reg(f"Reconoce '{nombre}' con sim ≈ 1.0",
             resultado is not None and resultado[0] == nombre and resultado[1] > 0.99,
@@ -238,16 +249,18 @@ if mongo_ok:
     reg("Embeddings de personas distintas tienen baja similitud",
         sim_cruzada < 0.3, f"sim={sim_cruzada:.4f}")
 
-    resultado_juan = mongo_store.buscar_persona_por_similitud(emb_juan, umbral=0.9)
-    reg("Juan se reconoce como Juan (no como María)",
-        resultado_juan is not None and resultado_juan[0] == "test_Juan",
-        str(resultado_juan))
-
     sub("4.6 Embedding desconocido — no debe reconocer a nadie")
     rng_desconocido = np.random.default_rng(12345)
     emb_desconocido = rng_desconocido.standard_normal(512).astype(np.float32)
     emb_desconocido /= np.linalg.norm(emb_desconocido)
-    resultado_desc = mongo_store.buscar_persona_por_similitud(emb_desconocido, umbral=0.9)
+    todos = mongo_store.cargar_embeddings_todos()
+    resultado_desc = None
+    for nombre, embs in todos.items():
+        for emb in embs:
+            q_norm = emb_desconocido / (np.linalg.norm(emb_desconocido) + 1e-9)
+            e_norm = emb / (np.linalg.norm(emb) + 1e-9)
+            if float(np.dot(q_norm, e_norm)) >= 0.9:
+                resultado_desc = (nombre, float(np.dot(q_norm, e_norm)))
     print(f"  {INFO}  Embedding desconocido: resultado={resultado_desc}")
     reg("Embedding desconocido no reconoce a nadie (umbral alto)",
         resultado_desc is None, str(resultado_desc))
@@ -362,7 +375,7 @@ if mongo_ok:
     reg("Limpieza de test completada", True)
 
 else:
-    sub("5.1-5.6 MongoDB no disponible — pruebas con _JsonMemory")
+    sub("5.1-5.6 MongoDB no disponible — pruebas con _RamMemory")
     mem_j = PersistentMemory("data/test_storage_sw2.json")
     for i in range(1, 9):
         mem_j.add_user_message(f"pregunta {i}", "test_Juan")

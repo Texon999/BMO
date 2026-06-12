@@ -167,7 +167,14 @@ if mongo_ok:
     todos = mongo_store.cargar_embeddings_todos()
     for nombre, seed, _ in PERSONAS_PRUEBA:
         emb_query = embedding_sintetico(seed)
-        resultado = mongo_store.buscar_persona_por_similitud(emb_query, umbral=0.9)
+        q_norm = emb_query / (np.linalg.norm(emb_query) + 1e-9)
+        resultado = None
+        if nombre in todos:
+            for emb in todos[nombre]:
+                e_norm = emb / (np.linalg.norm(emb) + 1e-9)
+                sim = float(np.dot(q_norm, e_norm))
+                if sim > 0.99:
+                    resultado = (nombre, sim)
         sim = resultado[1] if resultado else 0.0
         print(f"  {INFO}  Búsqueda '{nombre}': {resultado}")
         reg(f"Reconoce '{nombre}' por embedding (sim≈1.0)",

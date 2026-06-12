@@ -197,38 +197,6 @@ def cargar_embeddings_todos() -> dict[str, list[np.ndarray]]:
         return {}
 
 
-def buscar_persona_por_similitud(
-    embedding_query: np.ndarray,
-    umbral: float = 0.55,
-) -> Optional[tuple[str, float]]:
-    """
-    Búsqueda de similitud coseno sobre todos los embeddings registrados.
-    Devuelve (nombre, similitud) o None si ninguno supera el umbral.
-
-    Para ~50 personas con vectores de 512 dims esto tarda < 1ms.
-    No necesita ANN — la búsqueda exhaustiva numpy es suficiente.
-    """
-    todos = cargar_embeddings_todos()
-    if not todos:
-        return None
-
-    q_norm     = embedding_query / (np.linalg.norm(embedding_query) + 1e-9)
-    mejor_nombre: Optional[str] = None
-    mejor_sim  = -1.0
-
-    for nombre, embeddings in todos.items():
-        for emb in embeddings:
-            e_norm = emb / (np.linalg.norm(emb) + 1e-9)
-            sim    = float(np.dot(q_norm, e_norm))
-            if sim > mejor_sim:
-                mejor_sim    = sim
-                mejor_nombre = nombre
-
-    if mejor_nombre and mejor_sim >= umbral:
-        return mejor_nombre, mejor_sim
-    return None
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 # HISTORIAL DE CHAT — sliding window de 6 mensajes por persona
 # ══════════════════════════════════════════════════════════════════════════════

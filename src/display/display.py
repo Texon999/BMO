@@ -6,7 +6,7 @@ Muestra una ventana con la cara animada de BMO según el estado actual:
   - idle:      Cara en reposo, esperando
   - listening: Cara escuchando — 6 frames, animación media
   - thinking:  Cara pensando   — 9 frames, animación media
-  - speaking:  Cara hablando   — 8 frames, animación rápida
+  - speaking:  Cara hablando   — 8 frames, sincronizada con audio real
 
 Las imágenes se cargan desde assets/faces/{estado}/*.png al iniciar.
 Si no hay imágenes para un estado, se usa un rectángulo de color como fallback.
@@ -16,7 +16,9 @@ FPS por estado (independientes):
   - warmup/idle/error : 2 FPS  — estáticos o casi estáticos
   - listening         : 8 FPS  — animación media (6 frames → ciclo ~0.75s)
   - thinking          : 8 FPS  — animación media (9 frames → ciclo ~1.1s)
-  - speaking          : 12 FPS — animación rápida (8 frames → ciclo ~0.67s)
+  - speaking          : SINCRONIZADO CON AUDIO — la animación avanza solo cuando
+                        hay sonido real, creando movimiento natural de labios.
+                        Sin sonido = boca cerrada (frame 0)
 
 Modo headless (BMO_HEADLESS=true):
   No abre ninguna ventana. tick() simplemente duerme 30ms y devuelve True.
@@ -130,19 +132,48 @@ class DisplayBMO:
         """
         Avanza la animación y muestra el frame actual.
         Devuelve False si el usuario presiona Q (señal de apagado).
+        
+        Para el estado SPEAKING, sincroniza la animación con el nivel de audio real
+        en lugar de usar FPS fijo, creando una animación más natural.
         """
         if self._headless:
             time.sleep(0.03)
             return True
 
-        fps    = _FPS_POR_ESTADO.get(self.estado.value, _FPS_DEFAULT)
-        period = 1.0 / fps
-        now    = time.time()
+        # ── Lógica de animación según estado ──────────────────────────────────
+        if self.estado == Estado.SPEAKING:
+            # Sincronizar con audio real
+            from src.voice.voice import VozBMO
+            nivel_audio = VozBMO.audio_level
+            
+            # Si hay sonido significativo, avanzar la animación
+            # Si no hay sonido, mantener el frame actual (cara cerrada)
+            if nivel_audio > 0.05:  # Umbral para considerar que hay habla
+                # Velocidad de animación más lenta y suave
+                # Reducida para que la boca se mueva más despacio
+                fps = 4.0 + (nivel_audio * 8.0)  # Entre 4 y 12 FPS según volumen (antes 8-28)
+                period = 1.0 / fps
+                now = time.time()
+                
+                if now - self._last_t >= period:
+                    frames = self._frames[self.estado.value]
+                    self._idx = (self._idx + 1) % len(frames)
+                    self._last_t = now
+            else:
+                # Sin sonido, volver al primer frame (boca cerrada)
+                if self._idx != 0:
+                    self._idx = 0
+                    self._last_t = time.time()
+        else:
+            # Estados normales: usar FPS fijo
+            fps    = _FPS_POR_ESTADO.get(self.estado.value, _FPS_DEFAULT)
+            period = 1.0 / fps
+            now    = time.time()
 
-        if now - self._last_t >= period:
-            frames    = self._frames[self.estado.value]
-            self._idx = (self._idx + 1) % len(frames)
-            self._last_t = now
+            if now - self._last_t >= period:
+                frames    = self._frames[self.estado.value]
+                self._idx = (self._idx + 1) % len(frames)
+                self._last_t = now
 
         frame = self._frames[self.estado.value][self._idx].copy()
 
@@ -163,22 +194,23 @@ class DisplayBMO:
                 0.7, (100, 255, 100), 2,
             )
 
-        # Overlay: estado actual (esquina superior izquierda)
-        label = self.estado.value.upper()
-        cv2.putText(
-            frame, label,
-            (10, 25), cv2.FONT_HERSHEY_SIMPLEX,
-            0.6, (200, 200, 200), 1,
-        )
-
-        # Overlay: número de frame actual / total (debug)
-        frames_total = len(self._frames[self.estado.value])
-        if frames_total > 1:
-            cv2.putText(
-                frame, f"{self._idx + 1}/{frames_total}",
-                (WIN_W - 55, 25), cv2.FONT_HERSHEY_SIMPLEX,
-                0.5, (150, 150, 150), 1,
-            )
+        # Overlay de estado y frames deshabilitado para interfaz más limpia
+        # Descomenta las siguientes líneas si necesitas debug visual:
+        
+        # label = self.estado.value.upper()
+        # cv2.putText(
+        #     frame, label,
+        #     (10, 25), cv2.FONT_HERSHEY_SIMPLEX,
+        #     0.6, (200, 200, 200), 1,
+        # )
+        
+        # frames_total = len(self._frames[self.estado.value])
+        # if frames_total > 1:
+        #     cv2.putText(
+        #         frame, f"{self._idx + 1}/{frames_total}",
+        #         (WIN_W - 55, 25), cv2.FONT_HERSHEY_SIMPLEX,
+        #         0.5, (150, 150, 150), 1,
+        #     )
 
         cv2.imshow(WIN_NAME, frame)
         key = cv2.waitKey(1) & 0xFF
@@ -188,9 +220,3 @@ class DisplayBMO:
         if not self._headless:
             cv2.destroyAllWindows()
 
-    def get_info(self) -> dict:
-        """Devuelve información de los frames cargados (útil para debug)."""
-        return {
-            estado: len(frames)
-            for estado, frames in self._frames.items()
-        }

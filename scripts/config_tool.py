@@ -24,7 +24,6 @@ os.chdir(project_root)
 try:
     from src.config.config_manager import config_manager
     from src.memory.persistent_memory import persistent_memory
-    from src.config.audio_manager import audio_manager
 except ImportError as e:
     print(f"Error importando módulos: {e}")
     print("Asegúrate de ejecutar desde el directorio raíz del proyecto BMO")
@@ -76,17 +75,7 @@ def reset_memory():
 def test_audio():
     """Prueba el sistema de audio"""
     print("=== PRUEBA DEL SISTEMA DE AUDIO ===")
-    
-    # Inicializar audio manager
-    if audio_manager.initialize():
-        print("✅ Audio manager inicializado correctamente")
-        
-        if audio_manager.test_audio_system():
-            print("✅ Sistema de audio funcionando correctamente")
-        else:
-            print("❌ Error en el sistema de audio")
-    else:
-        print("❌ Error inicializando audio manager")
+    print("❌ audio_manager eliminado — la gestión de audio está integrada en voice.py")
 
 def interactive_config():
     """Configuración interactiva"""
@@ -146,7 +135,7 @@ def main():
     elif args.reset_memory:
         reset_memory()
     elif args.test_audio:
-        test_audio()
+        print("--test-audio no disponible: audio_manager eliminado, voz integrada en voice.py")
     elif args.interactive:
         interactive_config()
     else:

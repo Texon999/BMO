@@ -11,10 +11,12 @@ Reglas de negocio:
 
 Requiere MongoDB corriendo en localhost:27017 (o URI configurada en config.json).
 """
+import json
 import logging
 from pathlib import Path
 from datetime import datetime
 
+from src.storage.mongo_store import _contexto as _truncar
 from src.storage import mongo_store
 
 log = logging.getLogger("BMO.Memory")
@@ -33,21 +35,11 @@ _SYSTEM_CONTENT = (
     "Si no sabes algo o la pregunta no tiene sentido, di exactamente: "
     "'No tengo esa información.' y no agregues nada más. "
     "Bandera de Colombia: amarillo arriba, azul medio, rojo abajo. "
-    "Capital de Brasil: Brasilia."
+    "Capital de Brasil: Brasilia. "
+    "Siete maravillas del mundo: la Gran Muralla China, Petra, Cristo Redentor, Machu Picchu, Chichén Itzá, El Coliseo y el Taj Mahal."
 )
 
 _SYSTEM_MSG = {"role": "system", "content": _SYSTEM_CONTENT}
-
-
-def _truncar(texto: str) -> str:
-    """Guarda solo el contexto esencial (primeros MAX_CHARS_CONTEXTO chars)."""
-    texto = texto.strip()
-    if len(texto) <= MAX_CHARS_CONTEXTO:
-        return texto
-    corte = texto.rfind(" ", 0, MAX_CHARS_CONTEXTO)
-    if corte < MAX_CHARS_CONTEXTO // 2:
-        corte = MAX_CHARS_CONTEXTO
-    return texto[:corte] + "…"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -119,11 +111,80 @@ class _MongoMemory:
         return {"backend": "mongodb", **mongo_store.stats()}
 
 
+# ── Memoria en RAM para fallback / tests ───────────────────────────────────────
+
+class _RamMemory:
+    """Memoria en RAM pura para cuando MongoDB no está disponible."""
+
+    def __init__(self):
+        self.session_memory: list[dict] = []
+        self._historial: dict[str, list[dict]] = {}
+
+    def add_user_message(self, content: str, persona: str | None = None):
+        if persona:
+            self.session_memory.append({"role": "user", "content": content})
+        else:
+            self.session_memory = [{"role": "user", "content": content}]
+
+    def add_assistant_message(self, content: str, persona: str | None = None):
+        self.session_memory.append({"role": "assistant", "content": content})
+
+    def get_context_for_llm(self, persona: str | None = None) -> list[dict]:
+        system = {**_SYSTEM_MSG}
+        if persona:
+            system["content"] += f" El usuario se llama {persona}."
+        ctx = [system]
+        if persona:
+            ctx.extend(self._historial.get(persona, []))
+            ctx.extend(self.session_memory[-4:])
+        else:
+            ctx.extend(self.session_memory[-1:] if self.session_memory else [])
+        return ctx
+
+    def commit_session_to_permanent(self, persona: str | None = None):
+        if not self.session_memory or persona is None:
+            self.session_memory = []
+            return
+        if persona not in self._historial:
+            self._historial[persona] = []
+        for msg in self.session_memory:
+            self._historial[persona].append({"role": msg["role"], "content": _truncar(msg["content"])})
+            if len(self._historial[persona]) > MAX_MSGS_PERSONA:
+                self._historial[persona].pop(0)
+        self.session_memory = []
+
+    def clear_session(self):
+        self.session_memory = []
+
+    def save_memory(self):
+        pass
+
+    def get_memory_stats(self) -> dict:
+        return {"backend": "ram", "personas": len(self._historial)}
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Instancia global
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _crear_memoria() -> _MongoMemory:
+def _cargar_extras_system_prompt():
+    """Agrega system_prompt_extras desde config.json al _SYSTEM_CONTENT."""
+    global _SYSTEM_CONTENT, _SYSTEM_MSG
+    try:
+        cfg_path = Path("config.json")
+        if cfg_path.exists():
+            with open(cfg_path, encoding="utf-8") as f:
+                cfg = json.load(f)
+            extras = cfg.get("system_prompt_extras", "")
+            if extras:
+                _SYSTEM_CONTENT = _SYSTEM_CONTENT.strip() + "\n\n" + extras.strip()
+                _SYSTEM_MSG = {"role": "system", "content": _SYSTEM_CONTENT}
+    except Exception:
+        pass
+
+
+def _crear_memoria():
+    _cargar_extras_system_prompt()
     try:
         from src.config.config_manager import config_manager
         uri = config_manager.get("mongo_uri", "mongodb://localhost:27017")
@@ -131,13 +192,12 @@ def _crear_memoria() -> _MongoMemory:
     except Exception:
         uri, db = "mongodb://localhost:27017", "bmo_db"
 
-    if not mongo_store.connect(uri, db):
-        raise RuntimeError(
-            f"[MEMORY] No se pudo conectar a MongoDB en {uri}. "
-            "Asegúrate de que mongod esté corriendo: 'sudo systemctl start mongod'"
-        )
-    log.info("[MEMORY] Backend: MongoDB (%s/%s)", uri, db)
-    return _MongoMemory()
+    if mongo_store.connect(uri, db):
+        log.info("[MEMORY] Backend: MongoDB (%s/%s)", uri, db)
+        return _MongoMemory()
+
+    log.warning("[MEMORY] MongoDB no disponible, usando RAM")
+    return _RamMemory()
 
 
 persistent_memory = _crear_memoria()
@@ -193,54 +253,3 @@ class PersistentMemory:
         # Compatibilidad con tests que leen permanent_memory
         return [_SYSTEM_MSG] + self._impl.session_memory
 
-
-# ── Memoria en RAM para tests sin MongoDB ─────────────────────────────────────
-
-class _RamMemory:
-    """Memoria en RAM pura para tests unitarios cuando MongoDB no está disponible."""
-
-    def __init__(self):
-        self.session_memory: list[dict] = []
-        self._historial: dict[str, list[dict]] = {}
-
-    def add_user_message(self, content: str, persona: str | None = None):
-        if persona:
-            self.session_memory.append({"role": "user", "content": content})
-        else:
-            self.session_memory = [{"role": "user", "content": content}]
-
-    def add_assistant_message(self, content: str, persona: str | None = None):
-        self.session_memory.append({"role": "assistant", "content": content})
-
-    def get_context_for_llm(self, persona: str | None = None) -> list[dict]:
-        system = {**_SYSTEM_MSG}
-        if persona:
-            system["content"] += f" El usuario se llama {persona}."
-        ctx = [system]
-        if persona:
-            ctx.extend(self._historial.get(persona, []))
-            ctx.extend(self.session_memory[-4:])
-        else:
-            ctx.extend(self.session_memory[-1:] if self.session_memory else [])
-        return ctx
-
-    def commit_session_to_permanent(self, persona: str | None = None):
-        if not self.session_memory or persona is None:
-            self.session_memory = []
-            return
-        if persona not in self._historial:
-            self._historial[persona] = []
-        for msg in self.session_memory:
-            self._historial[persona].append({"role": msg["role"], "content": _truncar(msg["content"])})
-            if len(self._historial[persona]) > MAX_MSGS_PERSONA:
-                self._historial[persona].pop(0)
-        self.session_memory = []
-
-    def clear_session(self):
-        self.session_memory = []
-
-    def save_memory(self):
-        pass
-
-    def get_memory_stats(self) -> dict:
-        return {"backend": "ram", "personas": len(self._historial)}

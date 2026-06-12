@@ -12,6 +12,7 @@ from typing import Callable
 
 from src.config.config_manager import config_manager
 from src.memory.persistent_memory import persistent_memory
+from src.brain.classifier import categorizar_pregunta, num_predict_para, max_oraciones_para, length_hint_para, sin_acentos
 
 log = logging.getLogger("BMO")
 
@@ -37,29 +38,86 @@ def _execute_shutdown_handlers():
             log.warning("[SHUTDOWN] Handler falló: %s", e)
 
 
-# ── System prompt ─────────────────────────────────────────────────────────────
+# ── Respuestas predefinidas para preguntas comunes ───────────────────────────
 
-def get_system_prompt() -> str:
-    """
-    Prompt minimalista para qwen2.5:1.5b.
-    Cuanto más corto, menos alucina el modelo.
-    """
-    base = (
-        "Eres BMO, un robot asistente creado por Zambrano, "
-        "un joven programador del SENA apasionado por la tecnología. "
-        "Responde siempre en español. Sé amable y directo. "
-        "Máximo 2 oraciones para preguntas simples, 4 para explicaciones. "
-        "Sin listas, sin markdown, solo texto natural. "
-        "Si no sabes algo o la pregunta no tiene sentido, di exactamente: "
-        "'No tengo esa información.' y no agregues nada más. "
-        "Bandera de Colombia: amarillo arriba, azul medio, rojo abajo. "
-        "Capital de Brasil: Brasilia. "
-        "Hora de Aventura: BMO es un personaje de esa serie, un robot que vive con Finn y Jake."
-    )
-    extras = config_manager.get("system_prompt_extras", "")
-    if extras:
-        base += f" {extras}"
-    return base
+_RESPUESTAS_PREDEFINIDAS: list[tuple[re.Pattern, str]] = [
+    # Minecraft
+    (re.compile(r'\b(qué es|que es|explica|explicame|cuéntame|cuentame|dime sobre).*minecraft\b', re.IGNORECASE),
+        "Minecraft es un videojuego sandbox donde construyes con bloques. Puedes explorar mundos generados aleatoriamente y sobrevivir enfrentando enemigos. Es uno de los juegos más populares del mundo."),
+    
+    # Pi - dígitos
+    (re.compile(r'\b(cuántos|cuantos).*digitos.*\b(pi|p)\b', re.IGNORECASE),
+        "Pi tiene infinitos dígitos decimales. Es un número irracional que empieza con 3.14159 y nunca termina ni se repite."),
+    
+    # Pi - qué es
+    (re.compile(r'\b(qué es|que es|explica|explicame).*\b(pi|número pi|numero pi)\b', re.IGNORECASE),
+        "Pi es un número matemático irracional con infinitos dígitos decimales. Representa la relación entre la circunferencia y el diámetro de un círculo. Empieza con 3.14159."),
+    
+    # Pi - valor
+    (re.compile(r'\b(cuál es|cual es|valor de|cuánto es|cuanto es).*\b(pi|número pi|numero pi)\b', re.IGNORECASE),
+        "Pi vale aproximadamente 3.14159. Es un número irracional con infinitos dígitos decimales que nunca se repiten."),
+    
+    # Bandera Colombia
+    (re.compile(r'\bbandera.*colombia\b', re.IGNORECASE),
+        "La bandera de Colombia tiene tres franjas horizontales. Amarillo arriba ocupando la mitad, azul en el medio y rojo abajo."),
+
+    # Capital de Brasil
+    (re.compile(r'\bcapital.*brasil\b', re.IGNORECASE),
+        "La capital de Brasil es Brasilia, una ciudad planificada inaugurada en 1960."),
+    
+    # Siete maravillas
+    (re.compile(r'\b(siete maravillas|7 maravillas)\b', re.IGNORECASE),
+        "Las siete maravillas del mundo moderno son: la Gran Muralla China, Petra, el Cristo Redentor, Machu Picchu, Chichén Itzá, el Coliseo y el Taj Mahal."),
+    
+    # Preguntas sobre configuración
+    (re.compile(r'\b(cómo|como).*configur(a|ación).*\b(enciende|apaga|luces|cámara|camara|modo|idioma|volumen)\b', re.IGNORECASE),
+        "Puedo ayudarte con eso! Revisa la configuración en el archivo config.json. Pregúntame algo específico y te guiaré."),
+    
+    # ¿Qué hora es?
+    (re.compile(r'\b(qué hora|que hora|hora actual|hora es)\b', re.IGNORECASE),
+        "No tengo acceso a la hora actual. Necesito que me digas la hora o revisa el reloj de tu dispositivo."),
+    
+    # Preguntas sobre Zambrano (creador)
+    (re.compile(r'\b(quién te creo|quien te creo|quién te hizo|quien te hizo|tu creador|zambrano)\b', re.IGNORECASE),
+        "Fui creado por Zambrano, un joven programador del SENA apasionado por la tecnología y la inteligencia artificial."),
+    
+    # Preguntas sobre SENA
+    (re.compile(r'\b(sena|qué es el sena|que es el sena)\b', re.IGNORECASE),
+        "El SENA es el Servicio Nacional de Aprendizaje de Colombia. Ofrece formación técnica y tecnológica gratuita."),
+    
+    # Preguntas sobre tecnología
+    (re.compile(r'\b(qué es|que es).*(ia|inteligencia artificial|machine learning|aprendizaje automatico)\b', re.IGNORECASE),
+        "La inteligencia artificial es una tecnología que permite a las máquinas aprender y tomar decisiones. Se usa en asistentes como yo para entender y responder preguntas."),
+    
+    # Qué es un asistente virtual
+    (re.compile(r'\b(qué es|que es).*(asistente virtual|asistente de voz|chatbot)\b', re.IGNORECASE),
+        "Un asistente virtual es un programa que usa inteligencia artificial para conversar y ayudar. Yo soy un ejemplo de ello: puedo responder preguntas, recordar información y ejecutar comandos."),
+    
+    # API
+    (re.compile(r'\b(qué es|que es).*api\b', re.IGNORECASE),
+        "Una API es una interfaz que permite que dos programas se comuniquen. Funciona como un menú: defines qué puedes pedir y cómo pedirlo. Es fundamental para conectar servicios."),
+    
+    # Internet
+    (re.compile(r'\b(cómo funciona|como funciona).*internet\b', re.IGNORECASE),
+        "Internet es una red global de computadoras conectadas. Cuando visitas una web, tu computadora pide datos a un servidor. El servidor responde enviando la información a través de cables y routers."),
+    
+    # BMO (sobre sí mismo)
+    (re.compile(r'\b(quién eres|quien eres|qué eres|que eres|cuéntame de ti|cuentame de ti)\b', re.IGNORECASE),
+        "Soy BMO, un robot asistente creado por Zambrano. Puedo conversar contigo, responder preguntas y ayudarte con información. Estoy aquí para ser tu amigo."),
+    
+    # Hora de Aventura
+    (re.compile(r'\b(hora de aventura|adventure time|finn|jake)\b', re.IGNORECASE),
+        "Hora de Aventura es una serie animada. BMO es un personaje de esa serie, un robot que vive con Finn el humano y Jake el perro. Es un videojuego viviente muy adorable."),
+]
+
+
+def buscar_respuesta_predefinida(texto: str) -> str | None:
+    texto_lower = sin_acentos(texto.lower())
+    for patron, respuesta in _RESPUESTAS_PREDEFINIDAS:
+        if patron.search(texto_lower):
+            log.info(f"[PREDEFINIDA] Usando respuesta predefinida para: '{texto[:50]}'")
+            return respuesta
+    return None
 
 
 # ── Saludos ───────────────────────────────────────────────────────────────────
@@ -98,7 +156,7 @@ _NOMBRE_PATRONES = [
     r"puedes llamarme (\w+)",
     r"soy (\w+)",
     r"me llaman (\w+)",
-    r"registr[aá](?:me)? como (\w+)",
+    r"reg[ií]str[aá](?:me)? como (\w+)",
     r"gu[aá]rda(?:me)? como (\w+)",
     r"recu[eé]rda(?:me)? como (\w+)",
 ]
@@ -188,6 +246,42 @@ def cleanup_llm():
         pass
 
 
+# ── Normalización de texto ───────────────────────────────────────────────────
+
+def normalizar_texto_entrada(texto: str) -> str:
+    """
+    Normaliza el texto de entrada antes de enviarlo al LLM.
+    Corrige errores comunes de transcripción de Whisper.
+    """
+    texto_original = texto
+    
+    # Normalizar "número p" o "número P-I" a "número pi" (más agresivo)
+    texto = re.sub(r'número\s+p\b', 'número pi', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'número\s+p-i\b', 'número pi', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'número\s+p\.', 'número pi', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'número\s+pi\b', 'número pi', texto, flags=re.IGNORECASE)  # Ya normalizado
+    
+    # Normalizar "el p" a "el pi" (cuando se refiere al número)
+    texto = re.sub(r'\bel\s+p\b', 'el pi', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'\bel\s+p-i\b', 'el pi', texto, flags=re.IGNORECASE)
+    
+    # Normalizar "de p" a "de pi"
+    texto = re.sub(r'\bde\s+p\b', 'de pi', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'\bde\s+p-i\b', 'de pi', texto, flags=re.IGNORECASE)
+    
+    # Normalizar "tiene el número p" a "tiene el número pi"
+    texto = re.sub(r'tiene\s+el\s+número\s+p\b', 'tiene el número pi', texto, flags=re.IGNORECASE)
+    texto = re.sub(r'tiene\s+el\s+número\s+p-i\b', 'tiene el número pi', texto, flags=re.IGNORECASE)
+    
+    # Normalizar "dígitos tiene" variantes
+    texto = re.sub(r'dijitos', 'dígitos', texto, flags=re.IGNORECASE)
+    
+    if texto != texto_original:
+        log.info(f"[NORMALIZACIÓN] '{texto_original}' → '{texto}'")
+    
+    return texto
+
+
 # ── Pipeline principal: LLM → TTS ─────────────────────────────────────────────
 
 def responder_con_tts(
@@ -200,16 +294,53 @@ def responder_con_tts(
     Genera respuesta con el LLM en streaming y la habla en tiempo real.
     El texto pasa por normalizar_para_tts() antes de llegar a Piper.
     """
+    # Normalizar el texto de entrada
+    mensaje = normalizar_texto_entrada(mensaje)
+    
+    # Buscar respuesta predefinida primero
+    respuesta_predefinida = buscar_respuesta_predefinida(mensaje)
+    if respuesta_predefinida:
+        persistent_memory.add_user_message(mensaje, nombre_persona)
+        persistent_memory.add_assistant_message(respuesta_predefinida, nombre_persona)
+        
+        if on_start_speaking:
+            on_start_speaking()
+        
+        # Dividir en oraciones y hablar
+        oraciones = re.split(r'[.!?]+', respuesta_predefinida)
+        for oracion in oraciones:
+            oracion = oracion.strip()
+            if oracion:
+                log.info("[PREDEFINIDA→TTS] '%s'", oracion)
+                hablar_fn(oracion + ".")
+        return
+    
+    # Clasificar la pregunta para optimizar la respuesta
+    categoria = categorizar_pregunta(mensaje)
+    num_predict = num_predict_para(mensaje)
+    max_oraciones = max_oraciones_para(mensaje)
+    length_hint = length_hint_para(mensaje)
+    
+    log.info(f"[CLASSIFY] '{mensaje[:50]}...' → {categoria} (max {num_predict} tokens, {max_oraciones} oraciones)")
+    
     persistent_memory.add_user_message(mensaje, nombre_persona)
     messages = persistent_memory.get_context_for_llm(nombre_persona)
+    
+    # Agregar length_hint al system prompt
+    if messages and messages[0].get("role") == "system":
+        messages[0]["content"] += f" {length_hint}"
 
     model = config_manager.get("text_model", "qwen2.5:1.5b")
     options = config_manager.get_ollama_options()
+    options["num_predict"] = num_predict  # Limitar tokens según categoría
 
     tts_queue: list[str] = []
     tts_lock  = threading.Lock()
     tts_done  = threading.Event()
     full_resp: list[str] = []
+    oraciones_habladas = 0
+
+    SENTENCE_SPLIT = re.compile(r'(?<=[.!?])\s+')
 
     def _tts_worker():
         while True:
@@ -244,22 +375,38 @@ def responder_con_tts(
             full_resp.append(content)
             sentence_buffer += content
 
-            if any(p in content for p in ".!?\n"):
-                oracion = normalizar_para_tts(sentence_buffer.strip())
-                sentence_buffer = ""
-                if oracion and re.search(r"[a-záéíóúñ]{3,}", oracion, re.IGNORECASE):
-                    log.info("[LLM→TTS] '%s'", oracion)
-                    with tts_lock:
-                        tts_queue.append(oracion)
+            # Dividir el buffer completo por puntuación real
+            segments = SENTENCE_SPLIT.split(sentence_buffer)
 
-        # Resto sin puntuación al final del stream
-        if sentence_buffer.strip():
-            oracion = normalizar_para_tts(sentence_buffer.strip())
-            if oracion and oracion[-1] not in ".!?":
-                oracion += "."
-            if oracion and re.search(r"[a-záéíóúñ]{3,}", oracion, re.IGNORECASE):
+            if len(segments) > 1:
+                complete = segments[:-1]
+                sentence_buffer = segments[-1]
+
+                for s in complete:
+                    s = s.strip()
+                    if s and re.search(r"[a-záéíóúñ]{3,}", s, re.IGNORECASE):
+                        s = normalizar_para_tts(s)  # ✅ FIX: Normalizar TTS para pronunciación correcta
+                        log.info("[LLM→TTS] '%s'", s)
+                        with tts_lock:
+                            tts_queue.append(s)
+                        oraciones_habladas += 1
+
+                        if oraciones_habladas >= max_oraciones:
+                            break
+
+                if oraciones_habladas >= max_oraciones:
+                    log.info(f"[CLASSIFY] Límite de {max_oraciones} oraciones alcanzado, deteniendo stream")
+                    break
+
+        # Residuo sin puntuación al final del stream
+        resto = sentence_buffer.strip()
+        if resto and oraciones_habladas < max_oraciones:
+            if resto[-1] not in ".!?":
+                resto += "."
+            if re.search(r"[a-záéíóúñ]{3,}", resto, re.IGNORECASE):
+                resto = normalizar_para_tts(resto)  # ✅ FIX: Normalizar TTS
                 with tts_lock:
-                    tts_queue.append(oracion)
+                    tts_queue.append(resto)
 
     except Exception as e:
         log.warning("[LLM] Error: %s", e)

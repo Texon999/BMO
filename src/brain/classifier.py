@@ -56,6 +56,7 @@ Para debugging, revisar los logs que muestran: [CLASSIFY] pregunta → categorí
 """
 
 import re
+import unicodedata
 
 # ---------------------------------------------------------------------------
 # Categorías
@@ -73,54 +74,66 @@ class QueryCategory:
 
 
 NUM_PREDICT_MAP: dict[str, int] = {
-    QueryCategory.GREETING:  40,
-    QueryCategory.OPINION:   80,
-    QueryCategory.COMPARE:   120,
-    QueryCategory.FACTUAL:   100,
-    QueryCategory.TECHNICAL: 180,
-    QueryCategory.EXPLAIN:   200,
-    QueryCategory.CREATIVE:  280,
-    QueryCategory.SIMPLE:    100,
+    QueryCategory.GREETING:  40,   # 1 oración corta
+    QueryCategory.SIMPLE:    180,  # 3 oraciones (aumentado de 100)
+    QueryCategory.OPINION:   150,  # 3 oraciones (aumentado de 130)
+    QueryCategory.FACTUAL:   200,  # 4 oraciones (aumentado de 130)
+    QueryCategory.COMPARE:   180,  # 3 oraciones (aumentado de 150)
+    QueryCategory.TECHNICAL: 250,  # 4-5 oraciones (aumentado de 200)
+    QueryCategory.EXPLAIN:   280,  # 4-5 oraciones (aumentado de 220)
+    QueryCategory.CREATIVE:  350,  # 5-7 oraciones (aumentado de 300)
 }
 
 # Máximo de oraciones permitidas por categoría.
 # El stream se corta al llegar a este límite, independientemente de num_predict.
 # Esto evita que el modelo genere oraciones extra que no se pidieron.
 MAX_ORACIONES_MAP: dict[str, int] = {
-    QueryCategory.GREETING:  1,
-    QueryCategory.SIMPLE:    2,
-    QueryCategory.OPINION:   2,
-    QueryCategory.FACTUAL:   2,
-    QueryCategory.COMPARE:   3,
-    QueryCategory.TECHNICAL: 3,
-    QueryCategory.EXPLAIN:   3,
-    QueryCategory.CREATIVE:  5,
+    QueryCategory.GREETING:  1,   # "Hola, ¿cómo estás?"
+    QueryCategory.SIMPLE:    3,   # Respuesta directa + contexto + detalle (aumentado de 2)
+    QueryCategory.OPINION:   3,   # Opinión + razón + conclusión
+    QueryCategory.FACTUAL:   4,   # Dato + contexto + detalle + cierre (aumentado de 3)
+    QueryCategory.COMPARE:   4,   # Diferencia + ventaja/desventaja + detalle + conclusión (aumentado de 3)
+    QueryCategory.TECHNICAL: 5,   # Concepto + explicación + ejemplo + detalle + cierre (aumentado de 4)
+    QueryCategory.EXPLAIN:   5,   # Introducción + desarrollo + ejemplo + detalle + cierre (aumentado de 4)
+    QueryCategory.CREATIVE:  7,   # Creatividad necesita más espacio (aumentado de 6)
 }
 
 # Instrucción de longitud que se inyecta en el system prompt según categoría.
 # El modelo recibe una regla concreta de cuántas oraciones usar.
+# El límite de oraciones es el control principal, los tokens son generosos para no cortar.
 LENGTH_HINT_MAP: dict[str, str] = {
-    QueryCategory.GREETING:  "Responde en UNA sola oración corta y amigable. Nada más.",
-    QueryCategory.SIMPLE:    "Responde en máximo 2 oraciones directas. Ve al punto.",
-    QueryCategory.OPINION:   "Da tu opinión en 2 oraciones. Sé directo y personal.",
-    QueryCategory.FACTUAL:   "Responde en 2 oraciones EXACTAS: primero la respuesta concreta, luego un dato de contexto. Si no estás seguro de algún dato, di que no lo sabes. Sin rodeos, sin inventar.",
-    QueryCategory.COMPARE:   "Compara en 2-3 oraciones: diferencia clave y conclusión. Sin inventar datos.",
-    QueryCategory.TECHNICAL: "Explica en 3 oraciones claras. Usa lenguaje sencillo. Si no sabes algo, dilo.",
-    QueryCategory.EXPLAIN:   "Explica en 3 oraciones: idea principal, detalle clave, cierre. Si no sabes algo con certeza, admítelo.",
-    QueryCategory.CREATIVE:  "Sé creativo y conciso. Máximo 4-5 oraciones bien construidas.",
+    QueryCategory.GREETING:  "Responde en 1 oración corta.",
+    QueryCategory.SIMPLE:    "Responde en 2-3 oraciones: respuesta + contexto + detalle breve.",
+    QueryCategory.OPINION:   "Responde en 2-3 oraciones: opinión + razón + cierre.",
+    QueryCategory.FACTUAL:   "Responde en 3-4 oraciones: dato + contexto + explicación + cierre.",
+    QueryCategory.COMPARE:   "Responde en 3-4 oraciones: diferencia + detalles + ventaja + conclusión.",
+    QueryCategory.TECHNICAL: "Responde en 4-5 oraciones: concepto + funcionamiento + ejemplo + detalle + cierre.",
+    QueryCategory.EXPLAIN:   "Responde en 4-5 oraciones: definición + explicación + ejemplo + importancia + cierre.",
+    QueryCategory.CREATIVE:  "Responde en 5-7 oraciones bien desarrolladas con estructura completa.",
 }
+
+# ---------------------------------------------------------------------------
+# Normalización para clasificación
+# ---------------------------------------------------------------------------
+
+def sin_acentos(texto: str) -> str:
+    """Elimina tildes/diacríticos para que patrones coincidan con o sin acentos."""
+    nfkd = unicodedata.normalize('NFKD', texto)
+    return nfkd.encode('ascii', 'ignore').decode('ascii')
+
 
 # ---------------------------------------------------------------------------
 # Patrones regex
 # ---------------------------------------------------------------------------
 
-PATRON_SALUDO    = r"^(hola|buenos|buenas|adiós|adios|hasta|chao|bye|gracias|ok|sí|si|no|bien|mal|genial|perfecto|claro|dale)\b"
-PATRON_OPINION   = r"\b(qué piensas|que piensas|te gusta|cuál prefieres|cual prefieres|qué opinas|que opinas|crees que|tu favorit)\b"
-PATRON_COMPARE   = r"\b(diferencia entre|diferencias entre|cuál es mejor|cual es mejor|comparar|comparación|versus|vs\.?)\b"
-PATRON_TECNICO   = r"\b(código|codigo|programa|función|funcion|algoritmo|python|javascript|html|css|api|base de datos|servidor|variable|clase|objeto|método|metodo|error|bug|debug)\b"
-PATRON_EXPLICAR  = r"\b(explica|explícame|explicame|cómo funciona|como funciona|por qué|por que|cuéntame|cuentame|describe|qué significa|que significa|cómo se hace|como se hace)\b"
-PATRON_CREATIVO  = r"\b(cuento|historia|poema|lista|inventa|imagina|crea|escribe|redacta|genera|propón|propones|ideas para)\b"
-PATRON_FACTUAL   = r"\b(qué es|que es|quién es|quien es|cuándo|cuando|dónde|donde|cuánto|cuanto|cuál|cual|qué son|que son|quiénes son|quienes son)\b"
+PATRON_SALUDO    = r"^(hola|buenos|buenas|adios|hasta|chao|bye|gracias|ok|si|no|bien|mal|genial|perfecto|claro|dale)\b"
+PATRON_OPINION   = r"\b(que piensas|te gusta|cual prefieres|crees que|tu favorit)\b"
+PATRON_COMPARE   = r"\b(diferencia entre|diferencias entre|cual es mejor|comparar|comparacion|versus|vs\.?)\b"
+PATRON_TECNICO   = r"\b(codigo|programa|funcion|algoritmo|python|javascript|html|css|api|base de datos|servidor|variable|clase|objeto|metodo|error|bug|debug|linux|windows|terminal|consola|framework|libreria|dependencia|compilar|ejecutar|instalar|docker|git|servicio|proceso)\b"
+PATRON_EXPLICAR  = r"\b(explica|explicame|como funciona|por que|describe|que significa|como se hace|como se usa|como usar)\b"
+PATRON_CREATIVO  = r"\b(cuento|historia|poema|lista|inventa|imagina|crea|escribe|redacta|genera|propon|ideas para)\b"
+PATRON_PREGUNTA  = r"^(que\s+(es|son|fue|era|significa)|que\s+\w+\s+(es|son|fue)|cual\s+(es|son|fue)|como\s+(se|era|es|puedo|hago)|por\s+que|para\s+que|donde\s+esta|cuando\s+fue|cuanto\s+(es|vale|cuesta|tiene)|existe|hay\s+algun|sabes\s+(que|como|donde|cuando|por que))\b"
+PATRON_FACTUAL   = r"\b(quien es|quienes son|digitos|numero)\b"
 
 # ---------------------------------------------------------------------------
 # Funciones públicas
@@ -131,15 +144,13 @@ def categorizar_pregunta(texto: str) -> str:
     Clasifica *texto* en una de las categorías de QueryCategory.
 
     Orden de prioridad:
-      GREETING → OPINION → COMPARE → TECHNICAL → EXPLAIN → CREATIVE → FACTUAL → SIMPLE
+      OPINION → COMPARE → CREATIVE → EXPLAIN → TECHNICAL → FACTUAL → PREGUNTA → GREETING → SIMPLE
 
     Nunca lanza excepción; ante cualquier error devuelve SIMPLE.
     """
     try:
         t = texto.lower().strip() if isinstance(texto, str) else ""
-
-        if re.search(PATRON_SALUDO, t, re.IGNORECASE):
-            return QueryCategory.GREETING
+        t = sin_acentos(t)
 
         if re.search(PATRON_OPINION, t, re.IGNORECASE):
             return QueryCategory.OPINION
@@ -147,17 +158,23 @@ def categorizar_pregunta(texto: str) -> str:
         if re.search(PATRON_COMPARE, t, re.IGNORECASE):
             return QueryCategory.COMPARE
 
-        if re.search(PATRON_TECNICO, t, re.IGNORECASE):
-            return QueryCategory.TECHNICAL
+        if re.search(PATRON_CREATIVO, t, re.IGNORECASE):
+            return QueryCategory.CREATIVE
 
         if re.search(PATRON_EXPLICAR, t, re.IGNORECASE):
             return QueryCategory.EXPLAIN
 
-        if re.search(PATRON_CREATIVO, t, re.IGNORECASE):
-            return QueryCategory.CREATIVE
+        if re.search(PATRON_TECNICO, t, re.IGNORECASE):
+            return QueryCategory.TECHNICAL
 
         if re.search(PATRON_FACTUAL, t, re.IGNORECASE):
             return QueryCategory.FACTUAL
+
+        if re.search(PATRON_PREGUNTA, t, re.IGNORECASE):
+            return QueryCategory.FACTUAL
+
+        if re.search(PATRON_SALUDO, t, re.IGNORECASE):
+            return QueryCategory.GREETING
 
         return QueryCategory.SIMPLE
 
