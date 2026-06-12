@@ -27,10 +27,11 @@ extrae_tests = [
     ("juguemos minecraft", "minecraft"),
     ("juguemos al minecraft", "minecraft"),
     ("vamos a jugar mario", "mario"),
-    ("abre el juego hollow knight", "hollow knight"),
+    (    "abre el juego hollow knight", "hollow knight"),
     ("pon hollow knight", "hollow knight"),
     ("ejecuta hollow knight", "hollow knight"),
     ("hola como estas", None),
+    ("quiero jugar al hollow knight por favor", "hollow knight"),
 ]
 extrae_ok = True
 for texto, esperado in extrae_tests:
@@ -70,7 +71,29 @@ test("ejecutar_juego notepad", res is not None and "notepad" in res.lower())
 res = ejecutar_juego("quiero jugar algo", {})
 test("sin juegos => None", res is None)
 
-# 6. Imports de main.py
+# 6. Fix 2: nombre_mostrar limpia underscores
+juegos_underscore = {"test_game": "notepad.exe"}
+config_manager.set("juegos", juegos_underscore, save=False)
+j2 = construir_juegos(config_manager.config)
+res = ejecutar_juego("quiero jugar test_game", j2)
+test("Fix 2: nombre_mostrar sin underscores", res is not None and "Test Game" in res)
+
+# 7. Fix 3: _abrir_programa soporta protocolos
+from src.brain.commands import _abrir_programa
+import inspect
+src_abrir = inspect.getsource(_abrir_programa)
+test("Fix 3: soporta steam:// protocol", "://" in src_abrir and "shell=True" in src_abrir)
+
+# 8. Fix 4: _mejor_coincidencia_juego ordena por longitud
+from src.brain.commands import _mejor_coincidencia_juego
+juegos_ambig = {"hollow knight": "hk.exe", "hollow knight voidheart": "hkv.exe"}
+test("Fix 4: match mas especifico primero",
+     _mejor_coincidencia_juego("hollow knight", juegos_ambig) == "hollow knight")
+match_largo = _mejor_coincidencia_juego("hollow knight voidheart edition", juegos_ambig)
+test("Fix 4: texto largo matcha el mas largo",
+     match_largo == "hollow knight voidheart")
+
+# 9. Imports de main.py
 from src.brain.commands import construir_juegos as cj, ejecutar_juego as ej
 test("imports desde main.py", cj is not None and ej is not None)
 

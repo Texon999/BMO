@@ -9,6 +9,7 @@ Uso:
   3. Si hay match → BMO ejecuta la acción y responde sin pasar por el LLM
 """
 import subprocess
+import shutil
 import re
 import logging
 import webbrowser
@@ -33,10 +34,14 @@ class ComandoVoz:
 
 
 def _abrir_programa(ruta: str) -> None:
-    """Abre un programa o URL con subprocess."""
+    """Abre un programa, URL o protocolo (steam://, etc.)."""
     try:
-        if ruta.startswith("http://") or ruta.startswith("https://"):
-            webbrowser.open(ruta)
+        if "://" in ruta:
+            # URLs http/https van con webbrowser, protocolos como steam:// con shell=True
+            if ruta.startswith("http://") or ruta.startswith("https://"):
+                webbrowser.open(ruta)
+            else:
+                subprocess.Popen(ruta, shell=True)
             log.info("[COMANDO] URL abierta: %s", ruta)
         else:
             subprocess.Popen([ruta], shell=False)
@@ -160,9 +165,8 @@ def construir_juegos(config: dict) -> dict[str, str]:
     juegos: dict[str, str] = {}
     for nombre, ruta in juegos_raw.items():
         nombre_key = nombre.strip().lower()
-        path = Path(ruta)
-        if not path.exists() and not path.is_absolute():
-            log.warning("[JUEGOS] '%s' -> %s no encontrado, se intentara igual", nombre, ruta)
+        if ruta and not Path(ruta).exists() and not shutil.which(ruta):
+            log.warning("[JUEGOS] '%s' -> %s no encontrado en disco ni PATH, se intentara igual", nombre, ruta)
         juegos[nombre_key] = ruta
         log.info("[JUEGOS] Registrado: '%s' -> %s", nombre, ruta)
     if not juegos:
@@ -193,21 +197,23 @@ def _extraer_nombre_juego(texto: str) -> str | None:
 def _mejor_coincidencia_juego(texto_juego: str, juegos: dict[str, str]) -> str | None:
     """
     Busca la mejor coincidencia del nombre del juego en el diccionario de juegos.
-    Primero busca coincidencia exacta, luego parcial.
+    Ordena por nombre mas largo primero (mas especifico) para evitar matches ambiguos.
     """
     tj = texto_juego.lower().strip()
+    keys_ordenados = sorted(juegos, key=len, reverse=True)
+
     # Coincidencia exacta
     if tj in juegos:
         return tj
-    # Coincidencia parcial: el texto contiene el nombre del juego
-    for nombre_key in juegos:
+    # Coincidencia parcial: el texto contiene el nombre del juego o viceversa
+    for nombre_key in keys_ordenados:
         if nombre_key in tj or tj in nombre_key:
             return nombre_key
-    # Coincidencia por palabras: todas las palabras del nombre aparecen en el texto
+    # Coincidencia por palabras: al menos una palabra coincide
     palabras_juego = set(tj.split())
-    for nombre_key in juegos:
+    for nombre_key in keys_ordenados:
         palabras_key = set(nombre_key.split())
-        if palabras_key & palabras_juego:  # al menos una palabra coincide
+        if palabras_key & palabras_juego:
             return nombre_key
     return None
 
@@ -235,7 +241,7 @@ def ejecutar_juego(texto: str, juegos: dict[str, str]) -> str | None:
         return None
 
     ruta = juegos[juego_key]
-    nombre_mostrar = juego_key.title()
+    nombre_mostrar = juego_key.replace("_", " ").title()
 
     log.info("[JUEGOS] Abriendo '%s' -> %s", juego_key, ruta)
     try:
