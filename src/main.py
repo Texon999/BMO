@@ -123,7 +123,9 @@ from src.vision.vision   import VisionBMO
 from src.voice.voice     import VozBMO
 from src.voice.wake_word import WakeWordDetector
 from src.brain.brain     import responder_con_tts, detectar_nombre, saludo_fijo, precargar_modelo
+from src.brain.commands  import construir_comandos, ejecutar_comando, construir_juegos, ejecutar_juego
 from src.memory.register import nombres_a_ids
+from src.config.config_manager import config_manager
 from src.config.runtime import (
     CAMERA_INDEX,
     MIC_DEVICE,
@@ -215,6 +217,12 @@ class AgenteBMO:
 
         self._ultimo_saludo: dict[str, float] = {}
 
+        # Comandos de voz (cargados desde config.json)
+        self._comandos_voz = construir_comandos(config_manager.config)
+
+        # Juegos (cargados desde config.json → "juegos")
+        self._juegos = construir_juegos(config_manager.config)
+
         log.info("=== BMO listo ===")
 
     def run(self):
@@ -304,7 +312,7 @@ class AgenteBMO:
 
         self.display.set_estado(Estado.SPEAKING)
         self.voz.hablar("Hola! Soy BMO. Estoy listo para hablar contigo!")
-        self.display.set_estado(Estado.IDLE)
+        # No poner estado aquí - el loop principal lo manejará
 
         while self._running:
             try:
@@ -320,6 +328,7 @@ class AgenteBMO:
           2. Escucha pasiva esperando el wake word "BMO"
           3. Al detectar wake word → tín → escucha el prompt completo
           4. Procesa y responde
+          5. Ventana de escucha post-respuesta (10s sin requerir wake word)
         """
         # Saludo automático si la cámara reconoce a alguien nuevo
         with self._lock_camara:
@@ -333,9 +342,10 @@ class AgenteBMO:
                 log.info(f"Saludando a {nombre_reconocido}: '{saludo}'")
                 self.display.set_estado(Estado.SPEAKING, nombre=nombre_reconocido)
                 self.voz.hablar(saludo)
-                self.display.set_estado(Estado.IDLE)
+                # No poner estado aquí - el loop principal lo manejará
 
         # ── Escucha pasiva: esperar wake word ─────────────────────────────────
+        # Estado IDLE = "dormido" esperando wake word
         self.display.set_estado(Estado.IDLE)
         wake_detectado, prompt_inline = self._wake.escuchar_pasivo()
 
@@ -353,11 +363,52 @@ class AgenteBMO:
             texto = self.voz.escuchar()
 
         if not texto:
-            self.display.set_estado(Estado.IDLE)
+            # No se escuchó nada, volver a esperar wake word (IDLE = dormido)
             return
 
         log.info(f"Escuché: '{texto}'")
 
+        # Procesar el texto y responder
+        self._procesar_y_responder(texto)
+
+        # ── Ventana de escucha post-respuesta ─────────────────────────────────
+        # Después de responder, escuchar durante 10 segundos sin requerir wake word
+        # Si no hay actividad de voz, volver a esperar wake word
+        log.info("[VENTANA] Escuchando 10s sin requerir wake word...")
+        self.display.set_estado(Estado.LISTENING)  # Cara despierta esperando que hables
+        
+        inicio_ventana = time.time()
+        intentos_sin_voz = 0
+        MAX_INTENTOS_SIN_VOZ = 3  # Después de 3 intentos sin voz (~3s), salir
+        
+        while time.time() - inicio_ventana < 10.0:
+            # Escuchar en modo ventana (no requiere wake word)
+            wake_detectado, texto_ventana = self._wake.escuchar_pasivo(ventana_post_respuesta=True)
+            
+            if wake_detectado and texto_ventana:
+                log.info(f"[VENTANA] Escuché: '{texto_ventana}'")
+                self._procesar_y_responder(texto_ventana)
+                # Reiniciar la ventana después de cada respuesta
+                inicio_ventana = time.time()
+                intentos_sin_voz = 0
+                self.display.set_estado(Estado.LISTENING)  # Volver a listening después de responder
+            else:
+                # No se detectó voz
+                intentos_sin_voz += 1
+                if intentos_sin_voz >= MAX_INTENTOS_SIN_VOZ:
+                    log.info("[VENTANA] Sin actividad de voz - volviendo a esperar wake word")
+                    break
+            
+            # Si se agotó el tiempo sin nueva entrada, salir
+            if time.time() - inicio_ventana >= 10.0:
+                log.info("[VENTANA] Timeout - volviendo a esperar wake word")
+                break
+
+    def _procesar_y_responder(self, texto: str):
+        """
+        Procesa un texto escuchado y genera una respuesta.
+        Maneja registro de nombres y generación de respuestas con LLM.
+        """
         # Leer estado de cámara
         with self._lock_camara:
             nombre_reconocido = self._nombre_camara_reconocido
@@ -377,7 +428,7 @@ class AgenteBMO:
                 log.info("[NOMBRE] '%s' ya está registrado", nombre_nuevo)
                 self.display.set_estado(Estado.SPEAKING)
                 self.voz.hablar(f"Ya te conozco, {nombre_nuevo}! Encantado de verte.")
-                self.display.set_estado(Estado.IDLE)
+                # No poner estado aquí - el loop principal lo manejará
                 # Si la cámara no lo reconoció aún, usar como caché temporal
                 if not nombre_reconocido:
                     with self._lock_camara:
@@ -397,7 +448,7 @@ class AgenteBMO:
                     f"Hola {nombre_nuevo}! Te recuerdo mientras hablamos, "
                     "pero sin cámara no puedo guardar tu cara."
                 )
-                self.display.set_estado(Estado.IDLE)
+                # No poner estado aquí - el loop principal lo manejará
                 return
 
             if not hay_cara_en_camara:
@@ -407,7 +458,7 @@ class AgenteBMO:
                 self.voz.hablar(
                     f"Hola {nombre_nuevo}! Acércate a la cámara para que pueda verte bien."
                 )
-                self.display.set_estado(Estado.IDLE)
+                # No poner estado aquí - el loop principal lo manejará
                 return
 
             if nombre_reconocido:
@@ -422,6 +473,22 @@ class AgenteBMO:
                 log.info("[NOMBRE] Cara desconocida dijo '%s' → registrando foto", nombre_nuevo)
                 self._registrar_persona(nombre_nuevo)
                 return
+
+        # ── Comandos de voz (se ejecutan antes de consultar al LLM) ─────
+        respuesta_comando = ejecutar_comando(texto, self._comandos_voz)
+        if respuesta_comando:
+            log.info("[COMANDOS] Respuesta: '%s'", respuesta_comando)
+            self.display.set_estado(Estado.SPEAKING, nombre=self._nombre_activo)
+            self.voz.hablar(respuesta_comando)
+            return
+
+        # ── Juegos ──────────────────────────────────────────────────────────────
+        respuesta_juego = ejecutar_juego(texto, self._juegos)
+        if respuesta_juego:
+            log.info("[JUEGOS] Respuesta: '%s'", respuesta_juego)
+            self.display.set_estado(Estado.SPEAKING, nombre=self._nombre_activo)
+            self.voz.hablar(respuesta_juego)
+            return
 
         # Nombre activo para el LLM
         with self._lock_camara:
@@ -439,7 +506,7 @@ class AgenteBMO:
             on_start_speaking=_on_speaking,
             nombre_persona=nombre_contexto,
         )
-        self.display.set_estado(Estado.IDLE)
+        # No poner estado aquí - la ventana post-respuesta lo manejará
 
     # ── Registro de persona ───────────────────────────────────────────────────
 
@@ -463,7 +530,8 @@ class AgenteBMO:
         log.info(f"Capturando {CAPTURE_FRAMES} fotos...")
 
         while len(capturas) < CAPTURE_FRAMES and time.time() < timeout:
-            ret, f = self.vision.cap.read()
+            with self._lock_camara:
+                ret, f = self.vision.cap.read()
             if not ret:
                 break
             gray  = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
@@ -491,7 +559,7 @@ class AgenteBMO:
             self.display.set_estado(Estado.SPEAKING)
             self.voz.hablar("Hmm, no pude verte bien. Intentalo de nuevo!")
 
-        self.display.set_estado(Estado.IDLE)
+        # No poner estado aquí - el loop principal lo manejará
 
     # ── Apagado ───────────────────────────────────────────────────────────────
 

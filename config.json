@@ -46,5 +46,34 @@
   "hybrid_fallback_strategy": "llm_normal",
   "hybrid_response_blending": true,
   "hybrid_cache_enabled": true,
-  "hybrid_cache_size": 100
+  "hybrid_cache_size": 100,
+
+  "juegos": {
+    "hollow knight": "",
+    "minecraft": "",
+    "calculadora": "calc.exe"
+  },
+
+  "comandos_voz": {
+    "minecraft": {
+      "ruta": "",
+      "patron": "\\babre\\s+(?:el\\s+)?minecraft\\b",
+      "respuesta": "Abriendo Minecraft!"
+    },
+    "calculadora": {
+      "ruta": "calc.exe",
+      "patron": "\\babre\\s+(?:la\\s+)?calculadora\\b",
+      "respuesta": "Abriendo la calculadora!"
+    },
+    "navegador": {
+      "ruta": "https://google.com",
+      "patron": "\\babre\\s+(?:el\\s+)?navegador\\b",
+      "respuesta": "Abriendo el navegador!"
+    },
+    "bloc_notas": {
+      "ruta": "notepad.exe",
+      "patron": "\\babre\\s+(?:el\\s+)?bloc\\s+(?:de\\s+)?notas\\b",
+      "respuesta": "Abriendo bloc de notas!"
+    }
+  }
 }

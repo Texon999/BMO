@@ -75,7 +75,13 @@ class ConfigManager:
             
             # Visión
             "vision_process_every_n": VISION_PROCESS_EVERY_N,
-            
+
+            # Juegos (comandos de voz para lanzar juegos)
+            "juegos": {
+                "hollow knight": "",
+                "minecraft": "",
+            },
+
             # Configuración avanzada
             "debug_mode": False,
             "log_level": "INFO",
