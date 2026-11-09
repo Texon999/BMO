@@ -168,13 +168,15 @@ class SimuladorRegistro:
 
 
 sub("2.1 Nombre ya registrado → confirmar sin registrar de nuevo")
-# Registrar a test_reg_Existente primero
+# Registrar a test_reg_Existente primero (JSON siempre, para que funcione sin MongoDB;
+# Mongo también si está disponible).
+from src.memory.register import guardar_persona, _load, _save, MEMORY_FILE
+guardar_persona(8001, "test_reg_Existente")
 if mongo_ok:
     mongo_store.guardar_persona(8001, "test_reg_Existente")
-    from src.memory.register import _load, _save, MEMORY_FILE
-    mem = _load()
-    mem["8001"] = {"nombre": "test_reg_Existente", "visitas": 1, "embeddings": []}
-    _save(mem)
+mem = _load()
+mem["8001"] = {"nombre": "test_reg_Existente", "visitas": 1, "embeddings": []}
+_save(mem)
 
 sim = SimuladorRegistro(camara_disponible=True, cara_reconocida=None, cara_desconocida=True)
 accion = sim.procesar("mi nombre es test_reg_Existente")
@@ -293,11 +295,15 @@ else:
     guardar_persona(8002, "test_reg_JsonOnly")
     ids = n2i()
     reg("Persona guardada en JSON", any("test_reg_JsonOnly" in v for v in ids.values()))
-    # Limpiar
+    # Limpiar datos de test (JSON)
     from src.memory.register import _load, _save
     mem = _load()
-    if "8002" in mem:
-        del mem["8002"]
+    changed = False
+    for k in ("8001", "8002"):
+        if k in mem:
+            del mem[k]
+            changed = True
+    if changed:
         _save(mem)
 
 

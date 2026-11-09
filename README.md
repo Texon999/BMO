@@ -7,7 +7,7 @@ Corre 100% offline en PC o Raspberry Pi 5.
 
 | Módulo | Tecnología |
 |--------|-----------|
-| Visión | OpenCV LBPH + Haar Cascade |
+| Visión | OpenCV Haar Cascade (detección) + FaceEmbedder ONNX (embeddings 512 d, similitud coseno) |
 | STT    | faster-whisper (tiny/base) |
 | LLM    | Ollama — qwen2.5:1.5b (configurable) |
 | TTS    | Piper TTS — es_ES-sharvard-medium |
@@ -94,6 +94,20 @@ BMO_BRAIN_CONTEXT_HOT_RELOAD=true
 - `BMO_OUTPUT_DEVICE=-1` usa salida de audio por defecto.
 - `BMO_HEADLESS=true` desactiva ventana OpenCV (util para correr como servicio en Raspberry).
 
+## Modelos y archivos que necesita BMO
+
+BMO no incluye modelos grandes en el repo. Se descargan o generan tras la instalación:
+
+| Archivo | Para qué sirve | ¿Obligatorio? | Cómo obtenerlo |
+|---------|----------------|---------------|----------------|
+| `data/face_model.onnx` | Reconocimiento facial (embeddings 512 d). Si falta, BMO **detecta caras pero no reconoce a nadie** (modo degradado). | No | `python scripts/download_face_model.py` |
+| `voices/es_ES-sharvard-medium.onnx` + `.json` | Voz TTS en español (Piper). Si falta, BMO imprime el texto en consola en lugar de hablarlo. | No | `python scripts/download_voice.py` |
+| Ollama + modelo `qwen2.5:1.5b` | Cerebro conversacional. Si no hay Ollama, las respuestas predefinidas siguen funcionando; el LLM responde "Ups, BMO no puede pensar ahora." | No (para predefinidas) / Sí (para LLM) | `ollama pull qwen2.5:1.5b` |
+| `data/memory.json`, `data/persons.json`, `data/names.json` | Personas registradas, historial y nombres. Se crean solas al registrar alguien. | No | Se autogeneran |
+| `data/brain_context.txt` | Contexto inyectado al system prompt del LLM. | No | Crea el archivo tú mismo |
+
+El archivo `config.json` concentra parámetros (modelo LLM, temperatura, tokens, VAD, cámara, juegos, comandos de voz). `src/config/runtime.py` lee los mismos valores desde variables de entorno `BMO_*` con sensatos valores por defecto, por lo que puedes mover el proyecto entre PC y Raspberry Pi 5 sin editar código.
+
 ## Controles
 
 | Tecla | Acción |
@@ -105,19 +119,41 @@ BMO_BRAIN_CONTEXT_HOT_RELOAD=true
 ```
 BMO/
 ├── src/
-│   ├── main.py          # Loop principal
-│   ├── vision/vision.py # Reconocimiento facial
-│   ├── voice/voice.py   # STT (Whisper) + TTS (Piper)
-│   ├── brain/brain.py   # LLM via Ollama
-│   └── memory/register.py # Memoria unificada
+│   ├── main.py                 # Loop principal (cámara, lógica, display)
+│   ├── vision/
+│   │   ├── vision.py           # Detección Haar + reconocimiento ONNX
+│   │   └── embedder.py         # FaceEmbedder (embeddings 512 d, similitud coseno)
+│   ├── voice/
+│   │   ├── voice.py            # STT (faster-whisper + VAD) y TTS (Piper)
+│   │   └── wake_word.py        # Detector de wake word "BMO"
+│   ├── brain/
+│   │   ├── brain.py            # LLM vía Ollama, respuestas predefinidas, TTS streaming
+│   │   ├── classifier.py       # Clasificación de preguntas y parámetros del LLM
+│   │   └── commands.py         # Comandos y juegos por voz
+│   ├── memory/
+│   │   ├── register.py         # Personas y embeddings (MongoDB + JSON fallback)
+│   │   └── persistent_memory.py# Contexto de conversación (sliding window)
+│   ├── config/
+│   │   ├── runtime.py          # Parámetros desde variables de entorno BMO_*
+│   │   └── config_manager.py   # Gestor centralizado config.json con validación
+│   ├── storage/
+│   │   └── mongo_store.py      # Acceso a MongoDB
+│   └── display/
+│       └── display.py          # Animación de la cara (OpenCV, modo headless)
+├── config.json                 # Parámetros centrales (modelos, LLM, VAD, juegos, comandos)
 ├── data/
-│   ├── trainer.yml      # Modelo facial entrenado
-│   └── memory.json      # Personas + historial
-├── voices/              # Modelos de voz Piper (.onnx)
+│   ├── memory.json             # Personas registradas (fallback JSON)
+│   ├── persons.json / names.json
+│   ├── chat_memory.json
+│   ├── face_model.onnx         # Modelo facial (no se sube al repo)
+│   └── facts/                  # Hechos offline (banderas, geografía, ciencia)
+├── voices/                     # Modelos de voz Piper (.onnx) (no se suben al repo)
 ├── scripts/
 │   ├── download_voice.py
+│   ├── download_face_model.py
 │   ├── configure_devices.py
-│   └── smoke_check.py
+│   └── smoke_check.py          # Verificación sin cámara ni micrófono
+├── scripts/test_*.py           # Pruebas de flujo y rendimiento
 └── requirements.txt
 ```
 
@@ -151,6 +187,23 @@ python scripts/smoke_check.py
 ```
 
 Comprueba imports críticos, audio y que **Ollama** responda. Útil en una Raspberry nueva antes de `python -m src.main`.
+
+### Ejecutar sin cámara, micrófono ni servicios externos
+
+BMO está diseñado para degradarse gracefulmente:
+
+- **Sin cámara**: `VisionBMO` inicia en modo degradado (detecta caras pero no las reconoce) si falta `data/face_model.onnx`. `main.py` lo atrapa y sigue funcionando solo con audio.
+- **Sin micrófono / sin voz**: Si falta `voices/es_ES-sharvard-medium.onnx`, el TTS imprime el texto en consola en lugar de hablarlo.
+- **Sin pantalla**: `BMO_HEADLESS=true` desactiva la ventana OpenCV (útil como servicio en Raspberry Pi).
+- **Sin Ollama / sin LLM**: las respuestas predefinidas (saludos, pi, bandera de Colombia, SENA, etc.) siguen funcionando; solo el modelo generativo falla con un mensaje controlado.
+- **Sin hardware en absoluto**: las pruebas unitarias puras en `scripts/test_unidades.py` cubren detección de nombres, normalización para TTS, clasificación de preguntas y saludos. No requieren cámara, micrófono, Ollama ni MongoDB:
+
+```bash
+python scripts/test_unidades.py
+```
+
+## Demo
+No hay una URL de demo registrada en el repositorio. Si tienes un despliegue público, añade el enlace aquí para que el proyecto se pueda probar directamente.
 
 ## Aprender Python y este proyecto
 
