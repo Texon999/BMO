@@ -6,15 +6,17 @@ __pycache__/
 venv/
 *.egg-info/
 
-# Data - keep structure but ignore model/history
-data/trainer.yml
-data/history/
 data/names.json
 data/persons.json
+data/memory.json
+data/chat_memory.json
 data/test_*.json
 
 # Test results
 test_results*.json
+
+# Logs (pueden contener datos de estado de conversación)
+logs/
 
 # Voices (large binary files)
 voices/*.onnx
